@@ -286,6 +286,9 @@
         <div class="filter-group">
             <label><input type="checkbox" id="filterExpand" onchange="toggleExpandAll()"> Expandir todo</label>
         </div>
+        <div class="filter-group">
+            <button class="btn-refresh" onclick="clearFilters()" style="padding:6px 12px;font-size:12px">✕ Limpiar</button>
+        </div>
     </div>
 
     <div class="sections-container" id="sectionsContainer">
@@ -509,8 +512,10 @@
             const reworkOnly = document.getElementById('filterReworkOnly').checked;
 
             const type = document.getElementById('filterType').value;
+            const hasActiveFilter = !!(search || section || bucket || sprint || type || reworkOnly);
+
             const filtered = allTasks.filter(t => {
-                if (search && !t.name.toLowerCase().includes(search)) return false;
+                if (search && !t.name.toLowerCase().includes(search) && !t.flow.toLowerCase().includes(search)) return false;
                 if (section && t.section !== section) return false;
                 if (bucket && t.bucket !== bucket) return false;
                 if (sprint && t.sprintId !== sprint) return false;
@@ -519,6 +524,14 @@
                 if (reworkOnly && !t.isRework) return false;
                 return true;
             });
+
+            // Si hay filtros activos, auto-expandir todas las secciones y flujos que coinciden
+            if (hasActiveFilter) {
+                filtered.forEach(t => {
+                    expandedSections.add(t.section);
+                    expandedFlows.add(t.section + '|' + t.flow);
+                });
+            }
 
             renderSections(filtered);
         }
@@ -706,6 +719,19 @@
         function toggleFlow(key) {
             if (expandedFlows.has(key)) expandedFlows.delete(key);
             else expandedFlows.add(key);
+            applyFilters();
+        }
+
+        function clearFilters() {
+            document.getElementById('filterSearch').value = '';
+            document.getElementById('filterSection').value = '';
+            document.getElementById('filterBucket').value = '';
+            document.getElementById('filterSprint').value = '';
+            document.getElementById('filterType').value = '';
+            document.getElementById('filterReworkOnly').checked = false;
+            document.getElementById('filterExpand').checked = false;
+            expandedFlows.clear();
+            expandedSections = new Set(SECTIONS_ORDER);
             applyFilters();
         }
 
