@@ -168,6 +168,58 @@
         .meta-item .meta-value { font-size: 14px; }
         .description-block { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 16px; white-space: pre-wrap; font-size: 13px; line-height: 1.6; max-height: 400px; overflow-y: auto; }
 
+        /* Timeline */
+        .history-section { margin-top: 20px; }
+        .history-section h3 {
+            font-size: 13px; color: var(--text-muted); margin-bottom: 8px;
+            text-transform: uppercase; letter-spacing: 0.5px;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .history-stats {
+            display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px;
+        }
+        .history-loading { font-size: 12px; color: var(--text-muted); padding: 12px; text-align: center; }
+        .timeline {
+            position: relative; padding-left: 20px;
+            border-left: 2px solid var(--border);
+        }
+        .timeline-item {
+            position: relative; padding: 10px 0 10px 14px;
+            border-bottom: 1px dashed var(--border);
+        }
+        .timeline-item:last-child { border-bottom: none; }
+        .timeline-item::before {
+            content: ''; position: absolute; left: -26px; top: 16px;
+            width: 10px; height: 10px; border-radius: 50%;
+            background: var(--text-muted); border: 2px solid var(--bg);
+        }
+        .timeline-item.ev-fail::before    { background: #ef4444; }
+        .timeline-item.ev-pass::before    { background: #22c55e; }
+        .timeline-item.ev-reopen::before  { background: #f97316; }
+        .timeline-item.ev-approve::before { background: #12a594; }
+        .timeline-item.ev-blocker::before { background: #f76808; }
+        .timeline-item.ev-dev::before     { background: #1090e0; }
+        .timeline-item.ev-qa::before      { background: #ffc53d; }
+        .timeline-header {
+            display: flex; align-items: center; gap: 10px; margin-bottom: 4px; font-size: 12px;
+        }
+        .timeline-author { font-weight: 600; }
+        .timeline-date { color: var(--text-muted); font-size: 11px; }
+        .timeline-tags { display: flex; gap: 4px; flex-wrap: wrap; }
+        .ev-tag {
+            display: inline-block; padding: 1px 7px; border-radius: 10px;
+            font-size: 10px; font-weight: 600; text-transform: uppercase;
+        }
+        .ev-tag.fail    { background: #ef444422; color: #ef4444; border: 1px solid #ef444444; }
+        .ev-tag.pass    { background: #22c55e22; color: #22c55e; border: 1px solid #22c55e44; }
+        .ev-tag.reopen  { background: #f9731622; color: #f97316; border: 1px solid #f9731644; }
+        .ev-tag.approve { background: #12a59422; color: #12a594; border: 1px solid #12a59444; }
+        .ev-tag.blocker { background: #f7680822; color: #f76808; border: 1px solid #f7680844; }
+        .ev-tag.dev     { background: #1090e022; color: #1090e0; border: 1px solid #1090e044; }
+        .ev-tag.qa      { background: #ffc53d22; color: #ffc53d; border: 1px solid #ffc53d44; }
+        .timeline-body { font-size: 12px; color: var(--text); line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+        .timeline-body img { max-width: 100%; border-radius: 6px; margin-top: 6px; }
+
         .loading { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 80px 20px; color: var(--text-muted); }
         .spinner { width: 40px; height: 40px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 16px; }
         @keyframes spin { to { transform: rotate(360deg); } }
@@ -308,6 +360,11 @@
                 <div class="modal-meta" id="modalMeta"></div>
                 <h3 style="font-size:13px;color:var(--text-muted);margin-bottom:8px;">DESCRIPCIÓN</h3>
                 <div class="description-block" id="modalDescription"></div>
+                <div class="history-section">
+                    <h3>📜 Historial y actividad <span id="historyCount" style="color:var(--text-muted);font-size:11px;text-transform:none;letter-spacing:0">cargando...</span></h3>
+                    <div class="history-stats" id="historyStats"></div>
+                    <div id="historyTimeline" class="timeline"></div>
+                </div>
             </div>
         </div>
     </div>
@@ -811,6 +868,82 @@
             document.getElementById('modalDescription').textContent = t.description || '(Sin descripción)';
             document.getElementById('modalOverlay').classList.add('active');
             document.body.style.overflow = 'hidden';
+            loadTaskHistory(t.id);
+        }
+
+        // Detecta el tipo de evento a partir del texto del comentario
+        function classifyComment(text) {
+            const n = norm(text);
+            const events = [];
+            if (/\b(testing\s*fail|falla|fallo|no\s*pasa|bug\b|rechaz)/i.test(n)) events.push('fail');
+            if (/\b(testing\s*pass|aprobad|validad|ok\b|correcto|pasa\b|verificad|funcion)/i.test(n)) events.push('pass');
+            if (/\b(reabri|reabiert|reabrir|volver\s*a|devolver|devuelto|nuevamente|otra\s*vez)/i.test(n)) events.push('reopen');
+            if (/\b(done|terminad|finalizad|cerrad|listo)/i.test(n)) events.push('approve');
+            if (/\b(bloque|blocker|bloqueado|impedimen)/i.test(n)) events.push('blocker');
+            if (/\b(pull\s*request|pr\s*#?\d|pr\s+creado|commit|github\.com.*pull)/i.test(n)) events.push('dev');
+            if (/\b(qa\b|testing|pruebas?\b|probar|pase\s*a\s*qa|waiting\s*qa)/i.test(n)) events.push('qa');
+            return events;
+        }
+
+        async function loadTaskHistory(taskId) {
+            const countEl = document.getElementById('historyCount');
+            const timelineEl = document.getElementById('historyTimeline');
+            const statsEl = document.getElementById('historyStats');
+            countEl.textContent = 'cargando...';
+            timelineEl.innerHTML = '<div class="history-loading">Cargando comentarios...</div>';
+            statsEl.innerHTML = '';
+
+            try {
+                const data = await apiGet(`/api/task/${taskId}/comment`);
+                const comments = (data.comments || []).slice().sort((a, b) => parseInt(a.date) - parseInt(b.date));
+
+                // Contadores agregados
+                const counters = { fail: 0, pass: 0, reopen: 0, approve: 0, blocker: 0, dev: 0, qa: 0 };
+                const EV_LABEL = { fail: '🔴 Fail', pass: '✅ Pass', reopen: '🔁 Reabrir', approve: '🏁 Aprobado', blocker: '⛔ Blocker', dev: '🔧 Dev', qa: '🧪 QA' };
+
+                countEl.textContent = comments.length === 0 ? 'sin comentarios' : `${comments.length} eventos`;
+
+                if (comments.length === 0) {
+                    timelineEl.innerHTML = '<div class="history-loading">Sin comentarios registrados en esta tarea.</div>';
+                    return;
+                }
+
+                timelineEl.innerHTML = '';
+                comments.forEach(c => {
+                    const text = c.comment_text || (c.comment || []).map(p => p.text || '').join('').trim();
+                    const events = classifyComment(text);
+                    events.forEach(e => counters[e]++);
+                    const primary = events[0] || '';
+                    const date = new Date(parseInt(c.date));
+                    const fechaStr = date.toLocaleDateString('es-AR', { day: '2-digit', month: 'short', year: '2-digit' }) + ' ' + date.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+                    const tagsHtml = events.map(e => `<span class="ev-tag ${e}">${EV_LABEL[e]}</span>`).join('');
+                    const item = document.createElement('div');
+                    item.className = 'timeline-item' + (primary ? ' ev-' + primary : '');
+                    item.innerHTML = `
+                        <div class="timeline-header">
+                            <span class="timeline-author">${escapeHtml(c.user?.username || 'Usuario')}</span>
+                            <span class="timeline-date">${fechaStr}</span>
+                            <span class="timeline-tags">${tagsHtml}</span>
+                        </div>
+                        <div class="timeline-body">${escapeHtml(text || '(sin texto)')}</div>
+                    `;
+                    timelineEl.appendChild(item);
+                });
+
+                // Stats pills
+                const order = ['fail', 'reopen', 'blocker', 'qa', 'dev', 'pass', 'approve'];
+                const pills = order.filter(k => counters[k] > 0).map(k =>
+                    `<span class="ev-tag ${k}" style="padding:4px 10px;font-size:11px">${EV_LABEL[k]}: ${counters[k]}</span>`
+                );
+                const reworkScore = counters.fail + counters.reopen;
+                if (reworkScore > 0) {
+                    pills.unshift(`<span class="ev-tag reopen" style="padding:4px 10px;font-size:11px;background:#f97316;color:white">🔁 Retrabajo aprox.: ${reworkScore}</span>`);
+                }
+                statsEl.innerHTML = pills.join('');
+            } catch (err) {
+                timelineEl.innerHTML = `<div class="history-loading" style="color:var(--danger)">Error al cargar: ${escapeHtml(err.message)}</div>`;
+                countEl.textContent = 'error';
+            }
         }
 
         function closeModal(e) {
