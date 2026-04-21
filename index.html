@@ -42,7 +42,16 @@
         .stats-bar { display: flex; gap: 12px; padding: 16px 24px; overflow-x: auto; }
         .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; min-width: 0; flex: 1; }
         .stat-card .label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; white-space: nowrap; }
-        .stat-card .value { font-size: 26px; font-weight: 700; }
+        .stat-card .value { font-size: 26px; font-weight: 700; line-height: 1.1; }
+        .stat-card .sub-breakdown {
+            font-size: 10px; color: var(--text-muted); margin-top: 4px;
+            display: flex; gap: 6px; flex-wrap: wrap;
+        }
+        .stat-card .sub-breakdown span { white-space: nowrap; }
+        .stat-card .sub-breakdown .pill {
+            background: var(--surface2); border: 1px solid var(--border);
+            padding: 1px 6px; border-radius: 8px;
+        }
         .stats-divider { width: 2px; background: var(--border); border-radius: 1px; align-self: stretch; flex-shrink: 0; }
 
         /* Overall progress */
@@ -189,14 +198,38 @@
     </div>
 
     <div class="stats-bar">
-        <div class="stat-card"><div class="label">Total Tarjetas</div><div class="value" id="statTotal">-</div></div>
-        <div class="stat-card"><div class="label">🏁 Done / Closed</div><div class="value" style="color:#22c55e" id="statDone">-</div></div>
-        <div class="stat-card"><div class="label">🧪 En QA</div><div class="value" style="color:#ffc53d" id="statQa">-</div></div>
-        <div class="stat-card"><div class="label">🔧 En Desarrollo</div><div class="value" style="color:#1090e0" id="statDev">-</div></div>
-        <div class="stat-card"><div class="label">⏸ Por Hacer</div><div class="value" style="color:#8b8fa3" id="statTodo">-</div></div>
+        <div class="stat-card">
+            <div class="label">Total Tarjetas</div>
+            <div class="value" id="statTotal">-</div>
+            <div class="sub-breakdown" id="statTotalBreakdown"></div>
+        </div>
+        <div class="stat-card">
+            <div class="label">🏁 Done / Closed</div>
+            <div class="value" style="color:#22c55e" id="statDone">-</div>
+            <div class="sub-breakdown" id="statDoneBreakdown"></div>
+        </div>
+        <div class="stat-card">
+            <div class="label">🧪 En QA</div>
+            <div class="value" style="color:#ffc53d" id="statQa">-</div>
+            <div class="sub-breakdown" id="statQaBreakdown"></div>
+        </div>
+        <div class="stat-card">
+            <div class="label">🔧 En Desarrollo</div>
+            <div class="value" style="color:#1090e0" id="statDev">-</div>
+            <div class="sub-breakdown" id="statDevBreakdown"></div>
+        </div>
+        <div class="stat-card">
+            <div class="label">⏸ Por Hacer</div>
+            <div class="value" style="color:#8b8fa3" id="statTodo">-</div>
+            <div class="sub-breakdown" id="statTodoBreakdown"></div>
+        </div>
         <div class="stats-divider"></div>
         <div class="stat-card"><div class="label">% Avance</div><div class="value" style="color:var(--accent)" id="statProgress">-</div></div>
-        <div class="stat-card"><div class="label">🔁 Reabiertas</div><div class="value" style="color:#f97316" id="statRework">-</div></div>
+        <div class="stat-card">
+            <div class="label">🔁 Reabiertas</div>
+            <div class="value" style="color:#f97316" id="statRework">-</div>
+            <div class="sub-breakdown" id="statReworkBreakdown"></div>
+        </div>
     </div>
 
     <div class="overall-progress">
@@ -237,6 +270,14 @@
                 <option value="901324539845">Sprint 3</option>
                 <option value="901325316130">Sprint 4</option>
                 <option value="901326731539">Sprint 5</option>
+            </select>
+        </div>
+        <div class="filter-group">
+            <label>Tipo:</label>
+            <select class="filter-select" id="filterType" onchange="applyFilters()">
+                <option value="">Todas</option>
+                <option value="main">Principales</option>
+                <option value="sub">Subtareas</option>
             </select>
         </div>
         <div class="filter-group">
@@ -410,13 +451,17 @@
         function mapTask(t, sprintId, sprintName) {
             const status = (t.status.status || '').toLowerCase();
             const bucket = STATUS_BUCKET[status] || 'todo';
-            const isRework = /reabiert[ao]/i.test(t.name);
+            // Detectar reabiertas y cuántas veces: "Reabierta", "Reabierta 2", "Reabierto 3"
+            const reworkMatch = t.name.match(/reabiert[ao]\s*(\d+)?/i);
+            const isRework = !!reworkMatch;
+            const reworkCount = isRework ? (parseInt(reworkMatch[1]) || 1) : 0;
+            const isSub = !!t.parent;
             const { section, flow } = parseSectionFlow(t.name);
             return {
                 id: t.id,
                 name: t.name,
                 description: t.text_content || t.description || '',
-                status, bucket, isRework,
+                status, bucket, isRework, reworkCount, isSub,
                 section, flow,
                 statusColor: STATUS_COLORS[status] || '#87909e',
                 assignees: t.assignees.map(a => ({ name: a.username, initials: a.initials, color: a.color || '#6366f1' })),
@@ -463,11 +508,14 @@
             const sprint = document.getElementById('filterSprint').value;
             const reworkOnly = document.getElementById('filterReworkOnly').checked;
 
+            const type = document.getElementById('filterType').value;
             const filtered = allTasks.filter(t => {
                 if (search && !t.name.toLowerCase().includes(search)) return false;
                 if (section && t.section !== section) return false;
                 if (bucket && t.bucket !== bucket) return false;
                 if (sprint && t.sprintId !== sprint) return false;
+                if (type === 'main' && t.isSub) return false;
+                if (type === 'sub' && !t.isSub) return false;
                 if (reworkOnly && !t.isRework) return false;
                 return true;
             });
@@ -486,8 +534,19 @@
         }
 
         function calcCounts(tasks) {
-            const c = { total: tasks.length, todo: 0, dev: 0, qa: 0, done: 0, rework: 0 };
-            tasks.forEach(t => { c[t.bucket]++; if (t.isRework) c.rework++; });
+            const c = {
+                total: tasks.length, todo: 0, dev: 0, qa: 0, done: 0, rework: 0, reworkTimes: 0,
+                main: { total: 0, todo: 0, dev: 0, qa: 0, done: 0, rework: 0, reworkTimes: 0 },
+                sub:  { total: 0, todo: 0, dev: 0, qa: 0, done: 0, rework: 0, reworkTimes: 0 }
+            };
+            tasks.forEach(t => {
+                c[t.bucket]++;
+                if (t.isRework) { c.rework++; c.reworkTimes += t.reworkCount; }
+                const k = t.isSub ? 'sub' : 'main';
+                c[k].total++;
+                c[k][t.bucket]++;
+                if (t.isRework) { c[k].rework++; c[k].reworkTimes += t.reworkCount; }
+            });
             return c;
         }
 
@@ -527,12 +586,13 @@
                             <div style="width:${devPct}%;background:#1090e0"></div>
                             <div style="width:${todoPct}%;background:#87909e;opacity:0.4"></div>
                         </div>
-                        <div class="section-totals">
-                            ${c.done ? `<span class="counter-pill c-done"><span class="dot" style="background:#22c55e"></span>${c.done} done</span>` : ''}
-                            ${c.qa ? `<span class="counter-pill c-qa"><span class="dot" style="background:#ffc53d"></span>${c.qa} qa</span>` : ''}
-                            ${c.dev ? `<span class="counter-pill c-dev"><span class="dot" style="background:#1090e0"></span>${c.dev} dev</span>` : ''}
-                            ${c.todo ? `<span class="counter-pill c-todo"><span class="dot" style="background:#87909e"></span>${c.todo} todo</span>` : ''}
-                            ${c.rework ? `<span class="counter-pill c-rework"><span class="dot" style="background:#f97316"></span>${c.rework} 🔁</span>` : ''}
+                        <div class="section-totals" title="P=Principales · S=Subtareas">
+                            <span class="counter-pill c-total" title="Principales / Subtareas">P:${c.main.total} / S:${c.sub.total}</span>
+                            ${c.done ? `<span class="counter-pill c-done" title="Done — Principales:${c.main.done} · Subtareas:${c.sub.done}"><span class="dot" style="background:#22c55e"></span>${c.done} done <small style="opacity:.75">(${c.main.done}/${c.sub.done})</small></span>` : ''}
+                            ${c.qa ? `<span class="counter-pill c-qa" title="QA — Principales:${c.main.qa} · Subtareas:${c.sub.qa}"><span class="dot" style="background:#ffc53d"></span>${c.qa} qa <small style="opacity:.75">(${c.main.qa}/${c.sub.qa})</small></span>` : ''}
+                            ${c.dev ? `<span class="counter-pill c-dev" title="Dev — Principales:${c.main.dev} · Subtareas:${c.sub.dev}"><span class="dot" style="background:#1090e0"></span>${c.dev} dev <small style="opacity:.75">(${c.main.dev}/${c.sub.dev})</small></span>` : ''}
+                            ${c.todo ? `<span class="counter-pill c-todo" title="Todo — Principales:${c.main.todo} · Subtareas:${c.sub.todo}"><span class="dot" style="background:#87909e"></span>${c.todo} todo <small style="opacity:.75">(${c.main.todo}/${c.sub.todo})</small></span>` : ''}
+                            ${c.rework ? `<span class="counter-pill c-rework" title="Reabiertas — Principales:${c.main.rework} · Subtareas:${c.sub.rework} · Veces totales:${c.reworkTimes}"><span class="dot" style="background:#f97316"></span>🔁 ${c.rework} <small style="opacity:.75">(${c.main.rework}/${c.sub.rework})</small></span>` : ''}
                         </div>
                     </div>
                     <div class="section-body${isOpen ? ' open' : ''}" id="sec-body-${sanitize(sec)}"></div>
@@ -569,13 +629,13 @@
                 <div class="flow-header" onclick="toggleFlow('${escapeAttr(key)}')">
                     <span class="flow-chevron${isOpen ? ' open' : ''}">▶</span>
                     <div class="flow-name">${escapeHtml(flowName)}</div>
-                    <div class="flow-counters">
-                        <span class="counter-pill c-total">${c.total}</span>
-                        ${c.done ? `<span class="counter-pill c-done">${c.done} done</span>` : ''}
-                        ${c.qa ? `<span class="counter-pill c-qa">${c.qa} qa</span>` : ''}
-                        ${c.dev ? `<span class="counter-pill c-dev">${c.dev} dev</span>` : ''}
-                        ${c.todo ? `<span class="counter-pill c-todo">${c.todo} todo</span>` : ''}
-                        ${c.rework ? `<span class="counter-pill c-rework">🔁 ${c.rework}</span>` : ''}
+                    <div class="flow-counters" title="P=Principales / S=Subtareas">
+                        <span class="counter-pill c-total">${c.total} <small style="opacity:.7">(${c.main.total}/${c.sub.total})</small></span>
+                        ${c.done ? `<span class="counter-pill c-done" title="Done — P:${c.main.done} S:${c.sub.done}">${c.done} done</span>` : ''}
+                        ${c.qa ? `<span class="counter-pill c-qa" title="QA — P:${c.main.qa} S:${c.sub.qa}">${c.qa} qa</span>` : ''}
+                        ${c.dev ? `<span class="counter-pill c-dev" title="Dev — P:${c.main.dev} S:${c.sub.dev}">${c.dev} dev</span>` : ''}
+                        ${c.todo ? `<span class="counter-pill c-todo" title="Todo — P:${c.main.todo} S:${c.sub.todo}">${c.todo} todo</span>` : ''}
+                        ${c.rework ? `<span class="counter-pill c-rework" title="Reabiertas — P:${c.main.rework} S:${c.sub.rework} · Veces totales:${c.reworkTimes}">🔁 ${c.rework}${c.reworkTimes > c.rework ? ' / ' + c.reworkTimes + 'x' : ''}</span>` : ''}
                     </div>
                 </div>
                 <div class="flow-progress">
@@ -588,27 +648,53 @@
             `;
             const tasksBody = card.querySelector('.flow-tasks');
 
-            // Ordenar: primero todo, dev, qa, done; dentro por fecha desc
+            // Construir jerarquía: principales + sus subtareas anidadas
+            const mains = tasks.filter(t => !t.isSub);
+            const subs  = tasks.filter(t => t.isSub);
+            const orphanSubs = subs.filter(s => !mains.some(m => m.id === s.parent));
             const order = { todo: 1, dev: 2, qa: 3, done: 4 };
-            const sorted = [...tasks].sort((a, b) => {
-                if (order[a.bucket] !== order[b.bucket]) return order[a.bucket] - order[b.bucket];
-                return b.dateCreated - a.dateCreated;
-            });
+            const cmp = (a, b) => (order[a.bucket] - order[b.bucket]) || (b.dateCreated - a.dateCreated);
 
-            sorted.forEach(t => {
-                const color = t.statusColor;
-                const row = document.createElement('div');
-                row.className = 'task-row';
-                row.onclick = () => openDetail(t.id);
-                row.innerHTML = `
-                    <span class="task-status-dot" style="background:${color}"></span>
-                    <span class="task-name">${escapeHtml(t.name)}${t.isRework ? '<span class="rework-tag">🔁 REABIERTA</span>' : ''}</span>
-                    <span class="task-badge" style="background:${color}22;color:${color};border:1px solid ${color}44">${t.status}</span>
-                    <span class="task-sprint">${t.sprintName}</span>
-                `;
-                tasksBody.appendChild(row);
+            mains.sort(cmp).forEach(p => {
+                const children = subs.filter(s => s.parent === p.id).sort(cmp);
+                tasksBody.appendChild(renderTaskRow(p, false, children.length));
+                children.forEach(ch => tasksBody.appendChild(renderTaskRow(ch, true)));
             });
+            if (orphanSubs.length > 0) {
+                const sep = document.createElement('div');
+                sep.style.cssText = 'padding:6px 16px;font-size:10px;color:var(--text-muted);background:var(--bg);text-transform:uppercase;letter-spacing:0.5px;border-top:1px solid var(--border);border-bottom:1px solid var(--border)';
+                sep.textContent = `Subtareas sin padre en este flujo (${orphanSubs.length})`;
+                tasksBody.appendChild(sep);
+                orphanSubs.sort(cmp).forEach(s => tasksBody.appendChild(renderTaskRow(s, true)));
+            }
             return card;
+        }
+
+        function renderTaskRow(t, isChild, childCount) {
+            const color = t.statusColor;
+            const row = document.createElement('div');
+            row.className = 'task-row';
+            row.onclick = () => openDetail(t.id);
+            row.style.paddingLeft = isChild ? '68px' : '40px';
+            const typeTag = t.isSub
+                ? '<span class="task-badge" style="background:#6366f122;color:#818cf8;border:1px solid #6366f144">SUB</span>'
+                : '<span class="task-badge" style="background:#14b8a622;color:#14b8a6;border:1px solid #14b8a644">PRINCIPAL</span>';
+            const reworkTag = t.isRework
+                ? `<span class="rework-tag">🔁 REABIERTA${t.reworkCount > 1 ? ' x' + t.reworkCount : ''}</span>`
+                : '';
+            const childBadge = (!isChild && childCount > 0)
+                ? `<span class="task-badge" style="background:var(--surface);color:var(--text-muted);border:1px solid var(--border)">${childCount} sub</span>`
+                : '';
+            const prefix = isChild ? '<span style="color:var(--text-muted);margin-right:4px">↳</span>' : '';
+            row.innerHTML = `
+                <span class="task-status-dot" style="background:${color}"></span>
+                <span class="task-name">${prefix}${escapeHtml(t.name)}${reworkTag}</span>
+                ${childBadge}
+                ${typeTag}
+                <span class="task-badge" style="background:${color}22;color:${color};border:1px solid ${color}44">${t.status}</span>
+                <span class="task-sprint">${t.sprintName}</span>
+            `;
+            return row;
         }
 
         function toggleSection(sec) {
@@ -636,14 +722,29 @@
         function updateStats() {
             const c = calcCounts(allTasks);
             const pct = c.total > 0 ? Math.round(c.done / c.total * 100) : 0;
+            const reworkPctMain = c.main.total > 0 ? ((c.main.rework / c.main.total) * 100).toFixed(1) : '0';
+            const reworkPctSub  = c.sub.total  > 0 ? ((c.sub.rework  / c.sub.total)  * 100).toFixed(1) : '0';
+            const reworkPctTot  = c.total      > 0 ? ((c.rework      / c.total)      * 100).toFixed(1) : '0';
+
+            const bd = (main, sub) => `<span class="pill" title="Principales">P: <b>${main}</b></span><span class="pill" title="Subtareas">S: <b>${sub}</b></span>`;
+
             document.getElementById('statTotal').textContent = c.total;
+            document.getElementById('statTotalBreakdown').innerHTML = bd(c.main.total, c.sub.total);
             document.getElementById('statDone').textContent = c.done;
+            document.getElementById('statDoneBreakdown').innerHTML = bd(c.main.done, c.sub.done);
             document.getElementById('statQa').textContent = c.qa;
+            document.getElementById('statQaBreakdown').innerHTML = bd(c.main.qa, c.sub.qa);
             document.getElementById('statDev').textContent = c.dev;
+            document.getElementById('statDevBreakdown').innerHTML = bd(c.main.dev, c.sub.dev);
             document.getElementById('statTodo').textContent = c.todo;
+            document.getElementById('statTodoBreakdown').innerHTML = bd(c.main.todo, c.sub.todo);
             document.getElementById('statProgress').textContent = pct + '%';
-            document.getElementById('statRework').textContent = c.rework;
-            document.getElementById('totalBadge').textContent = `${c.total} tarjetas · 5 sprints`;
+            document.getElementById('statRework').textContent = c.rework + ' (' + reworkPctTot + '%)';
+            document.getElementById('statReworkBreakdown').innerHTML =
+                `<span class="pill" title="Principales reabiertas">P: <b>${c.main.rework}</b> (${reworkPctMain}%)</span>` +
+                `<span class="pill" title="Subtareas reabiertas">S: <b>${c.sub.rework}</b> (${reworkPctSub}%)</span>` +
+                (c.reworkTimes > c.rework ? `<span class="pill" title="Veces totales reabiertas (suma de contadores en títulos)">∑ veces: <b>${c.reworkTimes}</b></span>` : '');
+            document.getElementById('totalBadge').textContent = `${c.total} tarjetas · 5 sprints · P:${c.main.total} / S:${c.sub.total}`;
 
             // Overall progress bar
             const bar = document.getElementById('overallBar');
@@ -675,7 +776,8 @@
                 <div class="meta-item"><div class="meta-label">Sprint</div><div class="meta-value">${t.sprintName}</div></div>
                 <div class="meta-item"><div class="meta-label">Estado</div><div class="meta-value"><span class="task-badge" style="background:${color}22;color:${color};border:1px solid ${color}44">${t.status}</span></div></div>
                 <div class="meta-item"><div class="meta-label">Bucket</div><div class="meta-value">${BUCKET_LABEL[t.bucket]}</div></div>
-                <div class="meta-item"><div class="meta-label">Reabierta</div><div class="meta-value">${t.isRework ? '🔁 SÍ' : 'No'}</div></div>
+                <div class="meta-item"><div class="meta-label">Tipo</div><div class="meta-value">${t.isSub ? '🔸 Subtarea' : '🔹 Principal'}</div></div>
+                <div class="meta-item"><div class="meta-label">Reabierta</div><div class="meta-value">${t.isRework ? '🔁 SÍ' + (t.reworkCount > 1 ? ' (x' + t.reworkCount + ')' : '') : 'No'}</div></div>
                 <div class="meta-item"><div class="meta-label">Asignados</div><div class="meta-value">${t.assignees.map(a => a.name).join(', ') || 'Sin asignar'}</div></div>
                 <div class="meta-item"><div class="meta-label">Creado</div><div class="meta-value">${t.dateCreated.toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' })}</div></div>
                 <div class="meta-item"><div class="meta-label">Link ClickUp</div><div class="meta-value"><a href="${t.url}" target="_blank" style="color:var(--accent)">${t.id}</a></div></div>
@@ -735,7 +837,8 @@
             </div>`;
 
             // Resumen por sección
-            html += '<h2>Resumen por Sección</h2>';
+            const fmt = (total, main, sub) => `${total} <span style="color:#888;font-size:9px">(P:${main}/S:${sub})</span>`;
+            html += '<h2>Resumen por Sección — P=Principales · S=Subtareas</h2>';
             html += '<table><thead><tr><th>Sección</th><th>Flujos</th><th>Total</th><th>Done</th><th>QA</th><th>Dev</th><th>Por Hacer</th><th>Reabiertas</th><th>% Avance</th></tr></thead><tbody>';
             SECTIONS_ORDER.forEach(sec => {
                 if (!grouped[sec]) return;
@@ -745,12 +848,12 @@
                 html += `<tr>
                     <td><b>${sec}</b></td>
                     <td>${Object.keys(grouped[sec]).length}</td>
-                    <td>${sc.total}</td>
-                    <td class="done">${sc.done}</td>
-                    <td class="qa">${sc.qa}</td>
-                    <td class="dev">${sc.dev}</td>
-                    <td class="todo">${sc.todo}</td>
-                    <td class="rework">${sc.rework}</td>
+                    <td>${fmt(sc.total, sc.main.total, sc.sub.total)}</td>
+                    <td class="done">${fmt(sc.done, sc.main.done, sc.sub.done)}</td>
+                    <td class="qa">${fmt(sc.qa, sc.main.qa, sc.sub.qa)}</td>
+                    <td class="dev">${fmt(sc.dev, sc.main.dev, sc.sub.dev)}</td>
+                    <td class="todo">${fmt(sc.todo, sc.main.todo, sc.sub.todo)}</td>
+                    <td class="rework">${fmt(sc.rework, sc.main.rework, sc.sub.rework)}</td>
                     <td>${spct}%</td>
                 </tr>`;
             });
@@ -763,7 +866,14 @@
                 html += '<table><thead><tr><th>Flujo</th><th>Total</th><th>Done</th><th>QA</th><th>Dev</th><th>Por Hacer</th><th>Reabiertas</th></tr></thead><tbody>';
                 Object.entries(grouped[sec]).forEach(([fl, tasks]) => {
                     const fc = calcCounts(tasks);
-                    html += `<tr><td>${escapeHtml(fl)}</td><td><b>${fc.total}</b></td><td class="done">${fc.done}</td><td class="qa">${fc.qa}</td><td class="dev">${fc.dev}</td><td class="todo">${fc.todo}</td><td class="rework">${fc.rework}</td></tr>`;
+                    html += `<tr><td>${escapeHtml(fl)}</td>
+                        <td>${fmt(fc.total, fc.main.total, fc.sub.total)}</td>
+                        <td class="done">${fmt(fc.done, fc.main.done, fc.sub.done)}</td>
+                        <td class="qa">${fmt(fc.qa, fc.main.qa, fc.sub.qa)}</td>
+                        <td class="dev">${fmt(fc.dev, fc.main.dev, fc.sub.dev)}</td>
+                        <td class="todo">${fmt(fc.todo, fc.main.todo, fc.sub.todo)}</td>
+                        <td class="rework">${fmt(fc.rework, fc.main.rework, fc.sub.rework)}</td>
+                    </tr>`;
                 });
                 html += '</tbody></table>';
             });
