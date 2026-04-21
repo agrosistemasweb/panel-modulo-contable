@@ -125,6 +125,8 @@
             padding: 3px 9px; border-radius: 16px; font-size: 11px; font-weight: 600;
         }
         .counter-pill .dot { width: 7px; height: 7px; border-radius: 50%; }
+        .counter-pill.clickable { cursor: pointer; transition: transform 0.1s, filter 0.15s; }
+        .counter-pill.clickable:hover { filter: brightness(1.3); transform: translateY(-1px); }
         .c-total   { background: var(--border); color: var(--text); }
         .c-todo    { background: #87909e22; color: #8b8fa3; border: 1px solid #87909e44; }
         .c-dev     { background: #1090e022; color: #1090e0; border: 1px solid #1090e044; }
@@ -311,7 +313,7 @@
     <div class="filters">
         <div class="filter-group">
             <label>Buscar:</label>
-            <input type="text" class="filter-input" id="filterSearch" placeholder="Buscar por nombre..." oninput="applyFilters()">
+            <input type="text" class="filter-input" id="filterSearch" placeholder="Buscar por nombre..." oninput="activeFlowFilter='';applyFilters()">
         </div>
         <div class="filter-group">
             <label>Sección:</label>
@@ -447,6 +449,7 @@
         let allTasks = [];
         let expandedSections = new Set();
         let expandedFlows = new Set();
+        let activeFlowFilter = ''; // nombre exacto de flujo (set por click en pill)
 
         const norm = s => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 
@@ -636,7 +639,7 @@
                 const bucket = document.getElementById('filterBucket').value || '';
                 const sprint = document.getElementById('filterSprint').value || '';
                 const type = document.getElementById('filterType').value || '';
-                const hasActiveFilter = !!(search || section || bucket || sprint || type);
+                const hasActiveFilter = !!(search || section || bucket || sprint || type || activeFlowFilter);
 
                 const filtered = allTasks.filter(t => {
                     if (search) {
@@ -649,6 +652,7 @@
                     if (sprint && t.sprintId !== sprint) return false;
                     if (type === 'main' && t.isSub) return false;
                     if (type === 'sub' && !t.isSub) return false;
+                    if (activeFlowFilter && t.flow !== activeFlowFilter) return false;
                     return true;
                 });
 
@@ -668,6 +672,7 @@
                     if (bucket) parts.push(`estado="${bucket}"`);
                     if (sprint) parts.push(`sprint=${sprint.slice(-4)}`);
                     if (type) parts.push(`tipo=${type}`);
+                    if (activeFlowFilter) parts.push(`flujo="${activeFlowFilter}"`);
                     statusBox.style.display = 'block';
                     statusBox.innerHTML = `<b style="color:var(--accent)">${filtered.length}</b> de ${allTasks.length} tarjetas · Filtros: ${parts.join(' · ')} · <a href="javascript:clearFilters()" style="color:var(--accent)">limpiar</a>`;
                 } else {
@@ -750,11 +755,11 @@
                             <div style="width:${todoPct}%;background:#87909e;opacity:0.4"></div>
                         </div>
                         <div class="section-totals" title="P=Principales · S=Subtareas">
-                            <span class="counter-pill c-total" title="Principales / Subtareas">P:${c.main.total} / S:${c.sub.total}</span>
-                            ${c.done ? `<span class="counter-pill c-done" title="Done — Principales:${c.main.done} · Subtareas:${c.sub.done}"><span class="dot" style="background:#22c55e"></span>${c.done} done <small style="opacity:.75">(${c.main.done}/${c.sub.done})</small></span>` : ''}
-                            ${c.qa ? `<span class="counter-pill c-qa" title="QA — Principales:${c.main.qa} · Subtareas:${c.sub.qa}"><span class="dot" style="background:#ffc53d"></span>${c.qa} qa <small style="opacity:.75">(${c.main.qa}/${c.sub.qa})</small></span>` : ''}
-                            ${c.dev ? `<span class="counter-pill c-dev" title="Dev — Principales:${c.main.dev} · Subtareas:${c.sub.dev}"><span class="dot" style="background:#1090e0"></span>${c.dev} dev <small style="opacity:.75">(${c.main.dev}/${c.sub.dev})</small></span>` : ''}
-                            ${c.todo ? `<span class="counter-pill c-todo" title="Todo — Principales:${c.main.todo} · Subtareas:${c.sub.todo}"><span class="dot" style="background:#87909e"></span>${c.todo} todo <small style="opacity:.75">(${c.main.todo}/${c.sub.todo})</small></span>` : ''}
+                            <span class="counter-pill c-total clickable" title="Click: ver todas las de esta sección" onclick="event.stopPropagation(); filterBy('${escapeAttr(sec)}','')">P:${c.main.total} / S:${c.sub.total}</span>
+                            ${c.done ? `<span class="counter-pill c-done clickable" title="Click: filtrar Done en ${escapeAttr(sec)}" onclick="event.stopPropagation(); filterBy('${escapeAttr(sec)}','done')"><span class="dot" style="background:#22c55e"></span>${c.done} done <small style="opacity:.75">(${c.main.done}/${c.sub.done})</small></span>` : ''}
+                            ${c.qa ? `<span class="counter-pill c-qa clickable" title="Click: filtrar QA en ${escapeAttr(sec)}" onclick="event.stopPropagation(); filterBy('${escapeAttr(sec)}','qa')"><span class="dot" style="background:#ffc53d"></span>${c.qa} qa <small style="opacity:.75">(${c.main.qa}/${c.sub.qa})</small></span>` : ''}
+                            ${c.dev ? `<span class="counter-pill c-dev clickable" title="Click: filtrar Dev en ${escapeAttr(sec)}" onclick="event.stopPropagation(); filterBy('${escapeAttr(sec)}','dev')"><span class="dot" style="background:#1090e0"></span>${c.dev} dev <small style="opacity:.75">(${c.main.dev}/${c.sub.dev})</small></span>` : ''}
+                            ${c.todo ? `<span class="counter-pill c-todo clickable" title="Click: filtrar Por Hacer en ${escapeAttr(sec)}" onclick="event.stopPropagation(); filterBy('${escapeAttr(sec)}','todo')"><span class="dot" style="background:#87909e"></span>${c.todo} todo <small style="opacity:.75">(${c.main.todo}/${c.sub.todo})</small></span>` : ''}
                         </div>
                     </div>
                     <div class="section-body${isOpen ? ' open' : ''}" id="sec-body-${sanitize(sec)}"></div>
@@ -792,11 +797,11 @@
                     <span class="flow-chevron${isOpen ? ' open' : ''}">▶</span>
                     <div class="flow-name">${escapeHtml(flowName)}</div>
                     <div class="flow-counters" title="P=Principales / S=Subtareas">
-                        <span class="counter-pill c-total">${c.total} <small style="opacity:.7">(${c.main.total}/${c.sub.total})</small></span>
-                        ${c.done ? `<span class="counter-pill c-done" title="Done — P:${c.main.done} S:${c.sub.done}">${c.done} done</span>` : ''}
-                        ${c.qa ? `<span class="counter-pill c-qa" title="QA — P:${c.main.qa} S:${c.sub.qa}">${c.qa} qa</span>` : ''}
-                        ${c.dev ? `<span class="counter-pill c-dev" title="Dev — P:${c.main.dev} S:${c.sub.dev}">${c.dev} dev</span>` : ''}
-                        ${c.todo ? `<span class="counter-pill c-todo" title="Todo — P:${c.main.todo} S:${c.sub.todo}">${c.todo} todo</span>` : ''}
+                        <span class="counter-pill c-total clickable" title="Click: ver todas las de este flujo" onclick="event.stopPropagation(); filterBy('${escapeAttr(section)}','','${escapeAttr(flowName)}')">${c.total} <small style="opacity:.7">(${c.main.total}/${c.sub.total})</small></span>
+                        ${c.done ? `<span class="counter-pill c-done clickable" title="Click: filtrar Done en ${escapeAttr(flowName)}" onclick="event.stopPropagation(); filterBy('${escapeAttr(section)}','done','${escapeAttr(flowName)}')">${c.done} done</span>` : ''}
+                        ${c.qa ? `<span class="counter-pill c-qa clickable" title="Click: filtrar QA en ${escapeAttr(flowName)}" onclick="event.stopPropagation(); filterBy('${escapeAttr(section)}','qa','${escapeAttr(flowName)}')">${c.qa} qa</span>` : ''}
+                        ${c.dev ? `<span class="counter-pill c-dev clickable" title="Click: filtrar Dev en ${escapeAttr(flowName)}" onclick="event.stopPropagation(); filterBy('${escapeAttr(section)}','dev','${escapeAttr(flowName)}')">${c.dev} dev</span>` : ''}
+                        ${c.todo ? `<span class="counter-pill c-todo clickable" title="Click: filtrar Por Hacer en ${escapeAttr(flowName)}" onclick="event.stopPropagation(); filterBy('${escapeAttr(section)}','todo','${escapeAttr(flowName)}')">${c.todo} todo</span>` : ''}
                     </div>
                 </div>
                 <div class="flow-progress">
@@ -868,6 +873,20 @@
             applyFilters();
         }
 
+        // Click en pill de sección o flujo → aplica filtros y expande
+        function filterBy(section, bucket, flow) {
+            document.getElementById('filterSection').value = section || '';
+            document.getElementById('filterBucket').value = bucket || '';
+            activeFlowFilter = flow || '';
+            if (section) expandedSections.add(section);
+            if (section && flow) expandedFlows.add(section + '|' + flow);
+            applyFilters();
+            setTimeout(() => {
+                const container = document.getElementById('sectionsContainer');
+                if (container) container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 50);
+        }
+
         function clearFilters() {
             document.getElementById('filterSearch').value = '';
             document.getElementById('filterSection').value = '';
@@ -875,6 +894,7 @@
             document.getElementById('filterSprint').value = '';
             document.getElementById('filterType').value = '';
             document.getElementById('filterExpand').checked = false;
+            activeFlowFilter = '';
             expandedFlows.clear();
             expandedSections.clear();
             applyFilters();
