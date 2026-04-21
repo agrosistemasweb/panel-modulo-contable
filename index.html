@@ -343,6 +343,9 @@
         </div>
     </div>
 
+    <div id="errorBox" style="display:none;background:#ef444422;border:1px solid #ef4444;color:#ef4444;padding:12px 20px;margin:12px 24px;border-radius:8px;font-size:13px;font-family:monospace"></div>
+    <div id="filterStatus" style="padding:8px 24px;font-size:12px;color:var(--text-muted);display:none"></div>
+
     <div class="sections-container" id="sectionsContainer">
         <div class="loading" id="loadingArea">
             <div class="spinner"></div>
@@ -372,6 +375,15 @@
     <script>
         const WORKER_URL = 'https://panel-bugs-proxy.lorena-ruiz-e63.workers.dev';
         const AUTO_REFRESH_MS = 5 * 60 * 1000;
+
+        // Captura de errores global visible
+        window.addEventListener('error', (e) => {
+            const box = document.getElementById('errorBox');
+            if (box) {
+                box.style.display = 'block';
+                box.textContent = `❌ ERROR JS: ${e.message} (${e.filename}:${e.lineno})`;
+            }
+        });
 
         const SPRINT_LISTS = [
             { id: '901323690606', name: 'Sprint 1' },
@@ -536,6 +548,8 @@
 
         async function loadTasks() {
             document.getElementById('loadingArea').style.display = 'flex';
+            const errBox = document.getElementById('errorBox');
+            if (errBox) errBox.style.display = 'none';
 
             try {
                 const results = await Promise.all(SPRINT_LISTS.map(s => fetchAllPages(s.id).then(tasks => ({ sprint: s, tasks }))));
@@ -546,10 +560,15 @@
                 applyFilters();
                 updateStats();
                 document.getElementById('lastUpdated').textContent = 'Actualizado: ' + new Date().toLocaleTimeString('es-AR');
+                console.log('[panel] cargadas', allTasks.length, 'tareas');
             } catch (err) {
                 document.getElementById('loadingArea').innerHTML =
                     `<div style="color:var(--danger)">Error: ${escapeHtml(err.message)}<br><br>
                     <button class="btn-refresh" onclick="loadTasks()">Reintentar</button></div>`;
+                if (errBox) {
+                    errBox.style.display = 'block';
+                    errBox.textContent = `❌ loadTasks falló: ${err.message}`;
+                }
             }
         }
 
@@ -562,35 +581,62 @@
         }
 
         function applyFilters() {
-            const search = document.getElementById('filterSearch').value.toLowerCase();
-            const section = document.getElementById('filterSection').value;
-            const bucket = document.getElementById('filterBucket').value;
-            const sprint = document.getElementById('filterSprint').value;
-            const reworkOnly = document.getElementById('filterReworkOnly').checked;
+            try {
+                const search = (document.getElementById('filterSearch').value || '').toLowerCase();
+                const section = document.getElementById('filterSection').value || '';
+                const bucket = document.getElementById('filterBucket').value || '';
+                const sprint = document.getElementById('filterSprint').value || '';
+                const reworkOnly = document.getElementById('filterReworkOnly').checked;
+                const type = document.getElementById('filterType').value || '';
+                const hasActiveFilter = !!(search || section || bucket || sprint || type || reworkOnly);
 
-            const type = document.getElementById('filterType').value;
-            const hasActiveFilter = !!(search || section || bucket || sprint || type || reworkOnly);
-
-            const filtered = allTasks.filter(t => {
-                if (search && !t.name.toLowerCase().includes(search) && !t.flow.toLowerCase().includes(search)) return false;
-                if (section && t.section !== section) return false;
-                if (bucket && t.bucket !== bucket) return false;
-                if (sprint && t.sprintId !== sprint) return false;
-                if (type === 'main' && t.isSub) return false;
-                if (type === 'sub' && !t.isSub) return false;
-                if (reworkOnly && !t.isRework) return false;
-                return true;
-            });
-
-            // Si hay filtros activos, auto-expandir todas las secciones y flujos que coinciden
-            if (hasActiveFilter) {
-                filtered.forEach(t => {
-                    expandedSections.add(t.section);
-                    expandedFlows.add(t.section + '|' + t.flow);
+                const filtered = allTasks.filter(t => {
+                    if (search) {
+                        const nameHit = (t.name || '').toLowerCase().includes(search);
+                        const flowHit = (t.flow || '').toLowerCase().includes(search);
+                        if (!nameHit && !flowHit) return false;
+                    }
+                    if (section && t.section !== section) return false;
+                    if (bucket && t.bucket !== bucket) return false;
+                    if (sprint && t.sprintId !== sprint) return false;
+                    if (type === 'main' && t.isSub) return false;
+                    if (type === 'sub' && !t.isSub) return false;
+                    if (reworkOnly && !t.isRework) return false;
+                    return true;
                 });
-            }
 
-            renderSections(filtered);
+                if (hasActiveFilter) {
+                    filtered.forEach(t => {
+                        expandedSections.add(t.section);
+                        expandedFlows.add(t.section + '|' + t.flow);
+                    });
+                }
+
+                // Status bar visible de filtros
+                const statusBox = document.getElementById('filterStatus');
+                if (hasActiveFilter) {
+                    const parts = [];
+                    if (search) parts.push(`texto="${search}"`);
+                    if (section) parts.push(`sección="${section}"`);
+                    if (bucket) parts.push(`estado="${bucket}"`);
+                    if (sprint) parts.push(`sprint=${sprint.slice(-4)}`);
+                    if (type) parts.push(`tipo=${type}`);
+                    if (reworkOnly) parts.push('solo reabiertas');
+                    statusBox.style.display = 'block';
+                    statusBox.innerHTML = `<b style="color:var(--accent)">${filtered.length}</b> de ${allTasks.length} tarjetas · Filtros: ${parts.join(' · ')} · <a href="javascript:clearFilters()" style="color:var(--accent)">limpiar</a>`;
+                } else {
+                    statusBox.style.display = 'none';
+                }
+
+                renderSections(filtered);
+            } catch (err) {
+                const box = document.getElementById('errorBox');
+                if (box) {
+                    box.style.display = 'block';
+                    box.textContent = `❌ applyFilters falló: ${err.message}`;
+                }
+                console.error('applyFilters error', err);
+            }
         }
 
         function groupBySectionFlow(tasks) {
