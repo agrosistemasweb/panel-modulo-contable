@@ -42,15 +42,21 @@
         .stats-bar { display: flex; gap: 12px; padding: 16px 24px; overflow-x: auto; }
         .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; min-width: 0; flex: 1; }
         .stat-card .label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; white-space: nowrap; }
-        .stat-card .value { font-size: 26px; font-weight: 700; line-height: 1.1; }
-        .stat-card .sub-breakdown {
-            font-size: 10px; color: var(--text-muted); margin-top: 4px;
-            display: flex; gap: 6px; flex-wrap: wrap;
+        .stat-card .value { font-size: 28px; font-weight: 700; line-height: 1.1; }
+        .stat-card .value-row {
+            display: flex; align-items: center; justify-content: space-between; gap: 10px;
         }
-        .stat-card .sub-breakdown span { white-space: nowrap; }
+        .stat-card .sub-breakdown {
+            display: flex; flex-direction: column; gap: 3px; align-items: flex-end;
+        }
         .stat-card .sub-breakdown .pill {
             background: var(--surface2); border: 1px solid var(--border);
-            padding: 1px 6px; border-radius: 8px;
+            padding: 2px 8px; border-radius: 10px;
+            font-size: 13px; font-weight: 600; color: var(--text);
+            white-space: nowrap; line-height: 1.2;
+        }
+        .stat-card .sub-breakdown .pill .lbl {
+            color: var(--text-muted); font-weight: 500; margin-right: 2px;
         }
         .stats-divider { width: 2px; background: var(--border); border-radius: 1px; align-self: stretch; flex-shrink: 0; }
 
@@ -252,28 +258,38 @@
     <div class="stats-bar">
         <div class="stat-card">
             <div class="label">Total Tarjetas</div>
-            <div class="value" id="statTotal">-</div>
-            <div class="sub-breakdown" id="statTotalBreakdown"></div>
+            <div class="value-row">
+                <div class="value" id="statTotal">-</div>
+                <div class="sub-breakdown" id="statTotalBreakdown"></div>
+            </div>
         </div>
         <div class="stat-card">
             <div class="label">🏁 Done / Closed</div>
-            <div class="value" style="color:#22c55e" id="statDone">-</div>
-            <div class="sub-breakdown" id="statDoneBreakdown"></div>
+            <div class="value-row">
+                <div class="value" style="color:#22c55e" id="statDone">-</div>
+                <div class="sub-breakdown" id="statDoneBreakdown"></div>
+            </div>
         </div>
         <div class="stat-card">
             <div class="label">🧪 En QA</div>
-            <div class="value" style="color:#ffc53d" id="statQa">-</div>
-            <div class="sub-breakdown" id="statQaBreakdown"></div>
+            <div class="value-row">
+                <div class="value" style="color:#ffc53d" id="statQa">-</div>
+                <div class="sub-breakdown" id="statQaBreakdown"></div>
+            </div>
         </div>
         <div class="stat-card">
             <div class="label">🔧 En Desarrollo</div>
-            <div class="value" style="color:#1090e0" id="statDev">-</div>
-            <div class="sub-breakdown" id="statDevBreakdown"></div>
+            <div class="value-row">
+                <div class="value" style="color:#1090e0" id="statDev">-</div>
+                <div class="sub-breakdown" id="statDevBreakdown"></div>
+            </div>
         </div>
         <div class="stat-card">
             <div class="label">⏸ Por Hacer</div>
-            <div class="value" style="color:#8b8fa3" id="statTodo">-</div>
-            <div class="sub-breakdown" id="statTodoBreakdown"></div>
+            <div class="value-row">
+                <div class="value" style="color:#8b8fa3" id="statTodo">-</div>
+                <div class="sub-breakdown" id="statTodoBreakdown"></div>
+            </div>
         </div>
         <div class="stats-divider"></div>
         <div class="stat-card"><div class="label">% Avance</div><div class="value" style="color:var(--accent)" id="statProgress">-</div></div>
@@ -835,7 +851,7 @@
         function updateStats() {
             const c = calcCounts(allTasks);
             const pct = c.total > 0 ? Math.round(c.done / c.total * 100) : 0;
-            const bd = (main, sub) => `<span class="pill" title="Principales">P: <b>${main}</b></span><span class="pill" title="Subtareas">S: <b>${sub}</b></span>`;
+            const bd = (main, sub) => `<span class="pill" title="Principales"><span class="lbl">P</span>${main}</span><span class="pill" title="Subtareas"><span class="lbl">S</span>${sub}</span>`;
 
             document.getElementById('statTotal').textContent = c.total;
             document.getElementById('statTotalBreakdown').innerHTML = bd(c.main.total, c.sub.total);
