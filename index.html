@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Módulo Contable — Avance Global</title>
+    <style>
+        :root {
+            --bg: #0f1117;
+            --surface: #1a1d27;
+            --surface2: #242736;
+            --border: #2e3244;
+            --text: #e4e6ef;
+            --text-muted: #8b8fa3;
+            --accent: #6366f1;
+            --success: #22c55e;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --info: #3b82f6;
+            --rework: #f97316;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg); color: var(--text); min-height: 100vh;
+        }
+        .header {
+            background: var(--surface); border-bottom: 1px solid var(--border);
+            padding: 16px 24px; display: flex; align-items: center; justify-content: space-between;
+            position: sticky; top: 0; z-index: 100;
+        }
+        .header h1 { font-size: 20px; font-weight: 600; display: flex; align-items: center; gap: 10px; }
+        .header h1 .badge { background: var(--accent); color: white; font-size: 12px; padding: 2px 10px; border-radius: 12px; font-weight: 500; }
+        .header-actions { display: flex; gap: 10px; align-items: center; }
+        .btn-refresh {
+            background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+            padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 13px; transition: all 0.2s;
+        }
+        .btn-refresh:hover { background: var(--border); }
+        .last-updated { font-size: 12px; color: var(--text-muted); }
+
+        .stats-bar { display: flex; gap: 12px; padding: 16px 24px; overflow-x: auto; }
+        .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; min-width: 0; flex: 1; }
+        .stat-card .label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; white-space: nowrap; }
+        .stat-card .value { font-size: 26px; font-weight: 700; }
+        .stats-divider { width: 2px; background: var(--border); border-radius: 1px; align-self: stretch; flex-shrink: 0; }
+
+        /* Overall progress */
+        .overall-progress {
+            padding: 0 24px 16px 24px;
+        }
+        .overall-bar {
+            height: 24px; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; display: flex;
+        }
+        .overall-bar div { display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; color: white; transition: width 0.3s; }
+        .overall-legend { display: flex; gap: 16px; margin-top: 8px; font-size: 12px; color: var(--text-muted); flex-wrap: wrap; }
+        .legend-dot { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: middle; }
+
+        /* Filters */
+        .filters { padding: 12px 24px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; border-bottom: 1px solid var(--border); }
+        .filter-group { display: flex; align-items: center; gap: 6px; }
+        .filter-group label { font-size: 12px; color: var(--text-muted); font-weight: 500; }
+        .filter-select, .filter-input {
+            background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+            padding: 6px 12px; border-radius: 6px; font-size: 13px; outline: none;
+        }
+        .filter-input { width: 260px; }
+        .filter-select:focus, .filter-input:focus { border-color: var(--accent); }
+
+        /* Secciones */
+        .sections-container { padding: 16px 24px; }
+        .section-block {
+            background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+            margin-bottom: 18px; overflow: hidden;
+        }
+        .section-header {
+            padding: 14px 20px; display: flex; align-items: center; gap: 14px;
+            border-bottom: 1px solid var(--border); background: var(--surface2);
+            cursor: pointer; user-select: none;
+        }
+        .section-chevron { font-size: 12px; color: var(--text-muted); transition: transform 0.2s; width: 14px; }
+        .section-chevron.open { transform: rotate(90deg); }
+        .section-title { font-size: 16px; font-weight: 700; flex: 1; }
+        .section-title .icon { margin-right: 6px; }
+        .section-totals { display: flex; gap: 6px; flex-wrap: wrap; }
+        .mini-progress { width: 180px; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; display: flex; }
+        .mini-progress div { height: 100%; }
+
+        .section-body { display: none; padding: 14px 20px; }
+        .section-body.open { display: block; }
+
+        .flow-card {
+            background: var(--surface2); border: 1px solid var(--border); border-radius: 10px;
+            margin-bottom: 10px; overflow: hidden;
+        }
+        .flow-header {
+            padding: 12px 16px; display: flex; align-items: center; gap: 12px;
+            cursor: pointer; user-select: none;
+        }
+        .flow-chevron { font-size: 11px; color: var(--text-muted); transition: transform 0.2s; width: 12px; }
+        .flow-chevron.open { transform: rotate(90deg); }
+        .flow-name { font-size: 14px; font-weight: 600; flex: 1; min-width: 0; }
+        .flow-counters { display: flex; gap: 6px; flex-wrap: wrap; }
+
+        .counter-pill {
+            display: inline-flex; align-items: center; gap: 5px;
+            padding: 3px 9px; border-radius: 16px; font-size: 11px; font-weight: 600;
+        }
+        .counter-pill .dot { width: 7px; height: 7px; border-radius: 50%; }
+        .c-total   { background: var(--border); color: var(--text); }
+        .c-todo    { background: #87909e22; color: #8b8fa3; border: 1px solid #87909e44; }
+        .c-dev     { background: #1090e022; color: #1090e0; border: 1px solid #1090e044; }
+        .c-qa      { background: #ffc53d22; color: #ffc53d; border: 1px solid #ffc53d44; }
+        .c-done    { background: #22c55e22; color: #22c55e; border: 1px solid #22c55e44; }
+        .c-rework  { background: #f9731622; color: #f97316; border: 1px solid #f9731644; }
+
+        .flow-progress { height: 4px; background: var(--border); display: flex; overflow: hidden; }
+        .flow-progress .seg-done { background: #22c55e; }
+        .flow-progress .seg-qa   { background: #ffc53d; }
+        .flow-progress .seg-dev  { background: #1090e0; }
+        .flow-progress .seg-todo { background: #87909e; opacity: 0.35; }
+
+        .flow-tasks { display: none; border-top: 1px solid var(--border); }
+        .flow-tasks.open { display: block; }
+        .task-row {
+            display: flex; align-items: center; gap: 10px;
+            padding: 8px 16px 8px 40px; border-bottom: 1px solid var(--border);
+            cursor: pointer; transition: background 0.15s; font-size: 12px;
+        }
+        .task-row:last-child { border-bottom: none; }
+        .task-row:hover { background: var(--surface); }
+        .task-status-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+        .task-name { flex: 1; min-width: 0; }
+        .task-name .rework-tag {
+            display: inline-block; margin-left: 6px; padding: 1px 6px;
+            background: var(--rework); color: white; border-radius: 10px; font-size: 10px; font-weight: 600;
+        }
+        .task-badge {
+            display: inline-block; padding: 2px 8px; border-radius: 4px;
+            font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; white-space: nowrap;
+        }
+        .task-sprint { font-size: 10px; color: var(--text-muted); white-space: nowrap; }
+
+        /* Modal */
+        .modal-overlay {
+            display: none; position: fixed; inset: 0;
+            background: rgba(0,0,0,0.7); z-index: 1000;
+            justify-content: center; align-items: flex-start; padding: 40px 20px; overflow-y: auto;
+        }
+        .modal-overlay.active { display: flex; }
+        .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; width: 100%; max-width: 800px; max-height: 85vh; overflow-y: auto; }
+        .modal-header { padding: 20px 24px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: flex-start; }
+        .modal-header h2 { font-size: 18px; font-weight: 600; line-height: 1.4; flex: 1; padding-right: 16px; }
+        .modal-close { background: none; border: none; color: var(--text-muted); font-size: 24px; cursor: pointer; padding: 4px; line-height: 1; }
+        .modal-close:hover { color: var(--text); }
+        .modal-body { padding: 20px 24px; }
+        .modal-meta { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 16px; margin-bottom: 20px; }
+        .meta-item .meta-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+        .meta-item .meta-value { font-size: 14px; }
+        .description-block { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 16px; white-space: pre-wrap; font-size: 13px; line-height: 1.6; max-height: 400px; overflow-y: auto; }
+
+        .loading { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 80px 20px; color: var(--text-muted); }
+        .spinner { width: 40px; height: 40px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 16px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .empty { text-align: center; padding: 40px; color: var(--text-muted); font-size: 13px; }
+
+        @media (max-width: 900px) {
+            .header { flex-direction: column; gap: 10px; }
+            .stats-bar { flex-wrap: wrap; }
+            .stat-card { min-width: 120px; }
+            .section-header { flex-wrap: wrap; }
+            .mini-progress { width: 100%; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>
+            <span>📊 Módulo Contable — Avance Global</span>
+            <span class="badge" id="totalBadge">...</span>
+        </h1>
+        <div class="header-actions">
+            <span class="last-updated" id="lastUpdated"></span>
+            <button class="btn-refresh" onclick="window.open('https://agrosistemasweb.github.io/panel-automation/','_blank')">Panel Automatizaciones</button>
+            <button class="btn-refresh" onclick="window.open('https://agrosistemasweb.github.io/panel-bugs/','_blank')">Panel Bugs (por Sprint)</button>
+            <button class="btn-refresh" onclick="exportPDF()">Exportar PDF</button>
+            <button class="btn-refresh" onclick="loadTasks()">Actualizar</button>
+        </div>
+    </div>
+
+    <div class="stats-bar">
+        <div class="stat-card"><div class="label">Total Tarjetas</div><div class="value" id="statTotal">-</div></div>
+        <div class="stat-card"><div class="label">🏁 Done / Closed</div><div class="value" style="color:#22c55e" id="statDone">-</div></div>
+        <div class="stat-card"><div class="label">🧪 En QA</div><div class="value" style="color:#ffc53d" id="statQa">-</div></div>
+        <div class="stat-card"><div class="label">🔧 En Desarrollo</div><div class="value" style="color:#1090e0" id="statDev">-</div></div>
+        <div class="stat-card"><div class="label">⏸ Por Hacer</div><div class="value" style="color:#8b8fa3" id="statTodo">-</div></div>
+        <div class="stats-divider"></div>
+        <div class="stat-card"><div class="label">% Avance</div><div class="value" style="color:var(--accent)" id="statProgress">-</div></div>
+        <div class="stat-card"><div class="label">🔁 Reabiertas</div><div class="value" style="color:#f97316" id="statRework">-</div></div>
+    </div>
+
+    <div class="overall-progress">
+        <div class="overall-bar" id="overallBar"></div>
+        <div class="overall-legend">
+            <span><span class="legend-dot" style="background:#22c55e"></span>Done / Closed</span>
+            <span><span class="legend-dot" style="background:#ffc53d"></span>En QA</span>
+            <span><span class="legend-dot" style="background:#1090e0"></span>En Desarrollo</span>
+            <span><span class="legend-dot" style="background:#87909e;opacity:0.5"></span>Por Hacer</span>
+        </div>
+    </div>
+
+    <div class="filters">
+        <div class="filter-group">
+            <label>Buscar:</label>
+            <input type="text" class="filter-input" id="filterSearch" placeholder="Buscar por nombre..." oninput="applyFilters()">
+        </div>
+        <div class="filter-group">
+            <label>Sección:</label>
+            <select class="filter-select" id="filterSection" onchange="applyFilters()"><option value="">Todas</option></select>
+        </div>
+        <div class="filter-group">
+            <label>Estado:</label>
+            <select class="filter-select" id="filterBucket" onchange="applyFilters()">
+                <option value="">Todos</option>
+                <option value="todo">Por Hacer</option>
+                <option value="dev">En Desarrollo</option>
+                <option value="qa">En QA</option>
+                <option value="done">Done / Closed</option>
+            </select>
+        </div>
+        <div class="filter-group">
+            <label>Sprint:</label>
+            <select class="filter-select" id="filterSprint" onchange="applyFilters()">
+                <option value="">Todos</option>
+                <option value="901323690606">Sprint 1</option>
+                <option value="901324230121">Sprint 2</option>
+                <option value="901324539845">Sprint 3</option>
+                <option value="901325316130">Sprint 4</option>
+                <option value="901326731539">Sprint 5</option>
+            </select>
+        </div>
+        <div class="filter-group">
+            <label><input type="checkbox" id="filterReworkOnly" onchange="applyFilters()"> Solo reabiertas</label>
+        </div>
+        <div class="filter-group">
+            <label><input type="checkbox" id="filterExpand" onchange="toggleExpandAll()"> Expandir todo</label>
+        </div>
+    </div>
+
+    <div class="sections-container" id="sectionsContainer">
+        <div class="loading" id="loadingArea">
+            <div class="spinner"></div>
+            <span>Cargando las 5 listas de Sprints desde ClickUp...</span>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="modalOverlay" onclick="closeModal(event)">
+        <div class="modal" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h2 id="modalTitle"></h2>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="modal-meta" id="modalMeta"></div>
+                <h3 style="font-size:13px;color:var(--text-muted);margin-bottom:8px;">DESCRIPCIÓN</h3>
+                <div class="description-block" id="modalDescription"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const WORKER_URL = 'https://panel-bugs-proxy.lorena-ruiz-e63.workers.dev';
+        const AUTO_REFRESH_MS = 5 * 60 * 1000;
+
+        const SPRINT_LISTS = [
+            { id: '901323690606', name: 'Sprint 1' },
+            { id: '901324230121', name: 'Sprint 2' },
+            { id: '901324539845', name: 'Sprint 3' },
+            { id: '901325316130', name: 'Sprint 4' },
+            { id: '901326731539', name: 'Sprint 5' }
+        ];
+
+        const SECTIONS_ORDER = ['Configuración', 'Listas', 'Registración', 'Informes Contables', 'Informes Impositivos', 'Otros'];
+        const SECTION_ICONS = {
+            'Configuración': '⚙️',
+            'Listas': '📋',
+            'Registración': '📝',
+            'Informes Contables': '📈',
+            'Informes Impositivos': '🧾',
+            'Otros': '📦'
+        };
+
+        // Mapeo de status → bucket
+        const STATUS_BUCKET = {
+            'to do': 'todo',
+            'a revisar': 'dev',
+            'in progress': 'dev',
+            'blocked': 'dev',
+            'review': 'dev',
+            'automation': 'dev',
+            'waiting qa': 'qa',
+            'qa': 'qa',
+            'done': 'done',
+            'closed': 'done'
+        };
+        const BUCKET_LABEL = { todo: 'Por Hacer', dev: 'En Desarrollo', qa: 'En QA', done: 'Done' };
+        const BUCKET_COLOR = { todo: '#87909e', dev: '#1090e0', qa: '#ffc53d', done: '#22c55e' };
+        const STATUS_COLORS = {
+            'to do': '#87909e', 'a revisar': '#d97706', 'in progress': '#1090e0',
+            'blocked': '#f76808', 'review': '#ab4aba', 'automation': '#8b5cf6',
+            'waiting qa': '#ffc53d', 'qa': '#1090e0',
+            'done': '#22c55e', 'closed': '#12a594'
+        };
+        const SEC_CANON = {
+            'configuracion': 'Configuración',
+            'listas': 'Listas',
+            'registracion': 'Registración',
+            'informes contables': 'Informes Contables',
+            'informes impositivos': 'Informes Impositivos',
+            'informes de cuentas corrientes': 'Informes Contables',
+            'reportes': 'Informes Contables'
+        };
+
+        let allTasks = [];
+        let expandedSections = new Set(SECTIONS_ORDER);
+        let expandedFlows = new Set();
+
+        const norm = s => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+
+        async function apiGet(path) {
+            const r = await fetch(`${WORKER_URL}${path}`);
+            if (!r.ok) {
+                const e = await r.json().catch(() => ({}));
+                throw new Error(e.error || `Error ${r.status}`);
+            }
+            return r.json();
+        }
+
+        async function fetchAllPages(listId) {
+            let tasks = [];
+            let page = 0, hasMore = true;
+            while (hasMore) {
+                const data = await apiGet(`/api/tasks?list_id=${listId}&page=${page}&include_closed=true&subtasks=true`);
+                tasks = tasks.concat(data.tasks);
+                hasMore = data.tasks.length === 100;
+                page++;
+            }
+            return tasks;
+        }
+
+        function parseSectionFlow(name) {
+            let n = name.trim();
+            // Remove prefijos BUG / BUG Reabierta / FALTA / URGENTE / fecha "20/4 -"
+            n = n.replace(/^\d{1,2}\/\d{1,2}\s*[-–]\s*/, '');
+            n = n.replace(/^(BUG\s*(Reabiert[ao]s?)?|FALTA|URGENTE)\s*[-–\s]*/i, '').trim();
+
+            // "Módulo Contable - Sección - Flujo" (separador - o /)
+            let m = n.match(/^M[óo]dulo\s+Contable\s*[-\/]\s*([^-\/]+?)\s*[-\/]\s*(.+)$/i);
+            if (m) {
+                const secKey = norm(m[1]);
+                if (SEC_CANON[secKey]) {
+                    const rest = m[2];
+                    const flow = rest.split(/\s*[-–\/]\s*/)[0].trim();
+                    return { section: SEC_CANON[secKey], flow: normFlow(flow) };
+                }
+            }
+            // Tokenizar por /, -, –
+            const tokens = n.split(/[\/\-–]/).map(x => x.trim()).filter(Boolean);
+            for (let i = 0; i < tokens.length; i++) {
+                const k = norm(tokens[i]);
+                if (SEC_CANON[k] && i + 1 < tokens.length) {
+                    let flow = tokens[i + 1].trim();
+                    flow = flow.replace(/^(Apps?|Home|Contabilidad)$/i, '').trim();
+                    if (flow) return { section: SEC_CANON[k], flow: normFlow(flow) };
+                    // Si el siguiente era "Contabilidad" tomar el que sigue
+                    if (i + 2 < tokens.length) {
+                        const flow2 = tokens[i + 2].trim();
+                        if (flow2) return { section: SEC_CANON[k], flow: normFlow(flow2) };
+                    }
+                }
+            }
+            return { section: 'Otros', flow: 'Sin clasificar' };
+        }
+
+        // Normaliza nombres de flujos similares
+        function normFlow(f) {
+            const n = norm(f);
+            const mappings = [
+                [/cuentas\s+corrientes/, 'Cuentas Corrientes'],
+                [/cuentas\s+contables/, 'Cuentas Contables'],
+                [/centros?\s+(de\s+)?costos?/, 'Centro de Costos'],
+                [/sub\s+cuentas\s+corrientes/, 'Sub Cuentas Corrientes'],
+                [/ubicaci[oó]n/, 'Ubicaciones'],
+                [/cotizaci[oó]n\s+de?\s*monedas?/, 'Cotización de Monedas'],
+                [/bloque(a|o)r?\s+cuentas\s+contables/, 'Bloquear Cuentas Contables'],
+                [/bloque(a|o)r?\s+cuentas\s+corrientes/, 'Bloquear Cuentas Corrientes'],
+                [/comisionistas?/, 'Comisionistas'],
+                [/manejos?\s+de\s+usuarios?/, 'Manejo de Usuarios'],
+                [/tipo\s+de\s+movimientos?/, 'Tipos de Movimientos'],
+                [/aplicaci[oó]n\s+global\s+de\s+impuestos/, 'Aplicación Global de Impuestos'],
+                [/datos\s+de\s+la\s+firma/, 'Datos de la Firma'],
+                [/cereales\s+movimientos/, 'Cereales Movimientos'],
+                [/posici[oó]n\s+comercial/, 'Posición Comercial']
+            ];
+            for (const [re, label] of mappings) if (re.test(n)) return label;
+            // Capitalizar primera letra
+            return f.charAt(0).toUpperCase() + f.slice(1);
+        }
+
+        function mapTask(t, sprintId, sprintName) {
+            const status = (t.status.status || '').toLowerCase();
+            const bucket = STATUS_BUCKET[status] || 'todo';
+            const isRework = /reabiert[ao]/i.test(t.name);
+            const { section, flow } = parseSectionFlow(t.name);
+            return {
+                id: t.id,
+                name: t.name,
+                description: t.text_content || t.description || '',
+                status, bucket, isRework,
+                section, flow,
+                statusColor: STATUS_COLORS[status] || '#87909e',
+                assignees: t.assignees.map(a => ({ name: a.username, initials: a.initials, color: a.color || '#6366f1' })),
+                tags: t.tags.map(x => x.name),
+                priority: t.priority ? t.priority.priority : 'none',
+                dateCreated: new Date(parseInt(t.date_created)),
+                dateUpdated: t.date_updated ? new Date(parseInt(t.date_updated)) : null,
+                url: t.url, parent: t.parent,
+                sprintId, sprintName
+            };
+        }
+
+        async function loadTasks() {
+            document.getElementById('loadingArea').style.display = 'flex';
+
+            try {
+                const results = await Promise.all(SPRINT_LISTS.map(s => fetchAllPages(s.id).then(tasks => ({ sprint: s, tasks }))));
+                allTasks = [];
+                results.forEach(r => r.tasks.forEach(t => allTasks.push(mapTask(t, r.sprint.id, r.sprint.name))));
+
+                populateSectionFilter();
+                applyFilters();
+                updateStats();
+                document.getElementById('lastUpdated').textContent = 'Actualizado: ' + new Date().toLocaleTimeString('es-AR');
+            } catch (err) {
+                document.getElementById('loadingArea').innerHTML =
+                    `<div style="color:var(--danger)">Error: ${escapeHtml(err.message)}<br><br>
+                    <button class="btn-refresh" onclick="loadTasks()">Reintentar</button></div>`;
+            }
+        }
+
+        function populateSectionFilter() {
+            const sel = document.getElementById('filterSection');
+            sel.innerHTML = '<option value="">Todas</option>';
+            SECTIONS_ORDER.forEach(s => {
+                sel.innerHTML += `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`;
+            });
+        }
+
+        function applyFilters() {
+            const search = document.getElementById('filterSearch').value.toLowerCase();
+            const section = document.getElementById('filterSection').value;
+            const bucket = document.getElementById('filterBucket').value;
+            const sprint = document.getElementById('filterSprint').value;
+            const reworkOnly = document.getElementById('filterReworkOnly').checked;
+
+            const filtered = allTasks.filter(t => {
+                if (search && !t.name.toLowerCase().includes(search)) return false;
+                if (section && t.section !== section) return false;
+                if (bucket && t.bucket !== bucket) return false;
+                if (sprint && t.sprintId !== sprint) return false;
+                if (reworkOnly && !t.isRework) return false;
+                return true;
+            });
+
+            renderSections(filtered);
+        }
+
+        function groupBySectionFlow(tasks) {
+            const out = {};
+            tasks.forEach(t => {
+                if (!out[t.section]) out[t.section] = {};
+                if (!out[t.section][t.flow]) out[t.section][t.flow] = [];
+                out[t.section][t.flow].push(t);
+            });
+            return out;
+        }
+
+        function calcCounts(tasks) {
+            const c = { total: tasks.length, todo: 0, dev: 0, qa: 0, done: 0, rework: 0 };
+            tasks.forEach(t => { c[t.bucket]++; if (t.isRework) c.rework++; });
+            return c;
+        }
+
+        function renderSections(filtered) {
+            const cont = document.getElementById('sectionsContainer');
+            document.getElementById('loadingArea').style.display = 'none';
+            cont.innerHTML = '';
+
+            if (filtered.length === 0) {
+                cont.innerHTML = '<div class="empty">No hay tarjetas con los filtros aplicados.</div>';
+                return;
+            }
+
+            const grouped = groupBySectionFlow(filtered);
+
+            SECTIONS_ORDER.forEach(sec => {
+                if (!grouped[sec]) return;
+                const flows = grouped[sec];
+                const allSecTasks = Object.values(flows).flat();
+                const c = calcCounts(allSecTasks);
+                const isOpen = expandedSections.has(sec);
+
+                const block = document.createElement('div');
+                block.className = 'section-block';
+                const donePct = c.total > 0 ? c.done / c.total * 100 : 0;
+                const qaPct   = c.total > 0 ? c.qa   / c.total * 100 : 0;
+                const devPct  = c.total > 0 ? c.dev  / c.total * 100 : 0;
+                const todoPct = c.total > 0 ? c.todo / c.total * 100 : 0;
+
+                block.innerHTML = `
+                    <div class="section-header" onclick="toggleSection('${sec}')">
+                        <span class="section-chevron${isOpen ? ' open' : ''}">▶</span>
+                        <div class="section-title"><span class="icon">${SECTION_ICONS[sec] || '📦'}</span>${escapeHtml(sec)} <span style="color:var(--text-muted);font-weight:400;font-size:13px">· ${Object.keys(flows).length} flujos · ${c.total} tarjetas</span></div>
+                        <div class="mini-progress" title="Done ${Math.round(donePct)}% · QA ${Math.round(qaPct)}% · Dev ${Math.round(devPct)}% · Todo ${Math.round(todoPct)}%">
+                            <div style="width:${donePct}%;background:#22c55e"></div>
+                            <div style="width:${qaPct}%;background:#ffc53d"></div>
+                            <div style="width:${devPct}%;background:#1090e0"></div>
+                            <div style="width:${todoPct}%;background:#87909e;opacity:0.4"></div>
+                        </div>
+                        <div class="section-totals">
+                            ${c.done ? `<span class="counter-pill c-done"><span class="dot" style="background:#22c55e"></span>${c.done} done</span>` : ''}
+                            ${c.qa ? `<span class="counter-pill c-qa"><span class="dot" style="background:#ffc53d"></span>${c.qa} qa</span>` : ''}
+                            ${c.dev ? `<span class="counter-pill c-dev"><span class="dot" style="background:#1090e0"></span>${c.dev} dev</span>` : ''}
+                            ${c.todo ? `<span class="counter-pill c-todo"><span class="dot" style="background:#87909e"></span>${c.todo} todo</span>` : ''}
+                            ${c.rework ? `<span class="counter-pill c-rework"><span class="dot" style="background:#f97316"></span>${c.rework} 🔁</span>` : ''}
+                        </div>
+                    </div>
+                    <div class="section-body${isOpen ? ' open' : ''}" id="sec-body-${sanitize(sec)}"></div>
+                `;
+                cont.appendChild(block);
+
+                // Render flows
+                const body = block.querySelector('.section-body');
+                // Ordenar flows por: primero los que tienen más por hacer/desarrollo, luego total
+                const sortedFlows = Object.entries(flows).sort((a, b) => {
+                    const ca = calcCounts(a[1]), cb = calcCounts(b[1]);
+                    const urgA = ca.todo + ca.dev, urgB = cb.todo + cb.dev;
+                    if (urgA !== urgB) return urgB - urgA;
+                    return cb.total - ca.total;
+                });
+                sortedFlows.forEach(([flowName, tasks]) => {
+                    body.appendChild(renderFlow(sec, flowName, tasks));
+                });
+            });
+        }
+
+        function renderFlow(section, flowName, tasks) {
+            const c = calcCounts(tasks);
+            const key = section + '|' + flowName;
+            const isOpen = expandedFlows.has(key);
+            const donePct = c.total > 0 ? c.done / c.total * 100 : 0;
+            const qaPct   = c.total > 0 ? c.qa   / c.total * 100 : 0;
+            const devPct  = c.total > 0 ? c.dev  / c.total * 100 : 0;
+            const todoPct = c.total > 0 ? c.todo / c.total * 100 : 0;
+
+            const card = document.createElement('div');
+            card.className = 'flow-card';
+            card.innerHTML = `
+                <div class="flow-header" onclick="toggleFlow('${escapeAttr(key)}')">
+                    <span class="flow-chevron${isOpen ? ' open' : ''}">▶</span>
+                    <div class="flow-name">${escapeHtml(flowName)}</div>
+                    <div class="flow-counters">
+                        <span class="counter-pill c-total">${c.total}</span>
+                        ${c.done ? `<span class="counter-pill c-done">${c.done} done</span>` : ''}
+                        ${c.qa ? `<span class="counter-pill c-qa">${c.qa} qa</span>` : ''}
+                        ${c.dev ? `<span class="counter-pill c-dev">${c.dev} dev</span>` : ''}
+                        ${c.todo ? `<span class="counter-pill c-todo">${c.todo} todo</span>` : ''}
+                        ${c.rework ? `<span class="counter-pill c-rework">🔁 ${c.rework}</span>` : ''}
+                    </div>
+                </div>
+                <div class="flow-progress">
+                    <div class="seg-done" style="width:${donePct}%"></div>
+                    <div class="seg-qa" style="width:${qaPct}%"></div>
+                    <div class="seg-dev" style="width:${devPct}%"></div>
+                    <div class="seg-todo" style="width:${todoPct}%"></div>
+                </div>
+                <div class="flow-tasks${isOpen ? ' open' : ''}"></div>
+            `;
+            const tasksBody = card.querySelector('.flow-tasks');
+
+            // Ordenar: primero todo, dev, qa, done; dentro por fecha desc
+            const order = { todo: 1, dev: 2, qa: 3, done: 4 };
+            const sorted = [...tasks].sort((a, b) => {
+                if (order[a.bucket] !== order[b.bucket]) return order[a.bucket] - order[b.bucket];
+                return b.dateCreated - a.dateCreated;
+            });
+
+            sorted.forEach(t => {
+                const color = t.statusColor;
+                const row = document.createElement('div');
+                row.className = 'task-row';
+                row.onclick = () => openDetail(t.id);
+                row.innerHTML = `
+                    <span class="task-status-dot" style="background:${color}"></span>
+                    <span class="task-name">${escapeHtml(t.name)}${t.isRework ? '<span class="rework-tag">🔁 REABIERTA</span>' : ''}</span>
+                    <span class="task-badge" style="background:${color}22;color:${color};border:1px solid ${color}44">${t.status}</span>
+                    <span class="task-sprint">${t.sprintName}</span>
+                `;
+                tasksBody.appendChild(row);
+            });
+            return card;
+        }
+
+        function toggleSection(sec) {
+            if (expandedSections.has(sec)) expandedSections.delete(sec);
+            else expandedSections.add(sec);
+            applyFilters();
+        }
+
+        function toggleFlow(key) {
+            if (expandedFlows.has(key)) expandedFlows.delete(key);
+            else expandedFlows.add(key);
+            applyFilters();
+        }
+
+        function toggleExpandAll() {
+            const checked = document.getElementById('filterExpand').checked;
+            if (checked) {
+                allTasks.forEach(t => expandedFlows.add(t.section + '|' + t.flow));
+            } else {
+                expandedFlows.clear();
+            }
+            applyFilters();
+        }
+
+        function updateStats() {
+            const c = calcCounts(allTasks);
+            const pct = c.total > 0 ? Math.round(c.done / c.total * 100) : 0;
+            document.getElementById('statTotal').textContent = c.total;
+            document.getElementById('statDone').textContent = c.done;
+            document.getElementById('statQa').textContent = c.qa;
+            document.getElementById('statDev').textContent = c.dev;
+            document.getElementById('statTodo').textContent = c.todo;
+            document.getElementById('statProgress').textContent = pct + '%';
+            document.getElementById('statRework').textContent = c.rework;
+            document.getElementById('totalBadge').textContent = `${c.total} tarjetas · 5 sprints`;
+
+            // Overall progress bar
+            const bar = document.getElementById('overallBar');
+            bar.innerHTML = '';
+            const segs = [
+                { b: 'done', color: '#22c55e', n: c.done },
+                { b: 'qa', color: '#ffc53d', n: c.qa },
+                { b: 'dev', color: '#1090e0', n: c.dev },
+                { b: 'todo', color: '#87909e', n: c.todo, opacity: 0.4 }
+            ];
+            segs.forEach(s => {
+                if (s.n === 0) return;
+                const div = document.createElement('div');
+                div.style.width = (s.n / c.total * 100) + '%';
+                div.style.background = s.color;
+                if (s.opacity) div.style.opacity = s.opacity;
+                div.textContent = s.n;
+                bar.appendChild(div);
+            });
+        }
+
+        function openDetail(id) {
+            const t = allTasks.find(x => x.id === id);
+            if (!t) return;
+            const color = t.statusColor;
+            document.getElementById('modalTitle').textContent = t.name;
+            document.getElementById('modalMeta').innerHTML = `
+                <div class="meta-item"><div class="meta-label">Sección / Flujo</div><div class="meta-value">${escapeHtml(t.section)} → <b>${escapeHtml(t.flow)}</b></div></div>
+                <div class="meta-item"><div class="meta-label">Sprint</div><div class="meta-value">${t.sprintName}</div></div>
+                <div class="meta-item"><div class="meta-label">Estado</div><div class="meta-value"><span class="task-badge" style="background:${color}22;color:${color};border:1px solid ${color}44">${t.status}</span></div></div>
+                <div class="meta-item"><div class="meta-label">Bucket</div><div class="meta-value">${BUCKET_LABEL[t.bucket]}</div></div>
+                <div class="meta-item"><div class="meta-label">Reabierta</div><div class="meta-value">${t.isRework ? '🔁 SÍ' : 'No'}</div></div>
+                <div class="meta-item"><div class="meta-label">Asignados</div><div class="meta-value">${t.assignees.map(a => a.name).join(', ') || 'Sin asignar'}</div></div>
+                <div class="meta-item"><div class="meta-label">Creado</div><div class="meta-value">${t.dateCreated.toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' })}</div></div>
+                <div class="meta-item"><div class="meta-label">Link ClickUp</div><div class="meta-value"><a href="${t.url}" target="_blank" style="color:var(--accent)">${t.id}</a></div></div>
+            `;
+            document.getElementById('modalDescription').textContent = t.description || '(Sin descripción)';
+            document.getElementById('modalOverlay').classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeModal(e) {
+            if (e && e.target !== document.getElementById('modalOverlay')) return;
+            document.getElementById('modalOverlay').classList.remove('active');
+            document.body.style.overflow = '';
+        }
+        document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+        function escapeHtml(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+        function escapeAttr(s) { return (s || '').replace(/'/g, "\\'"); }
+        function sanitize(s) { return (s || '').replace(/[^a-z0-9]/gi, '_'); }
+
+        function exportPDF() {
+            const now = new Date().toLocaleDateString('es-AR');
+            const c = calcCounts(allTasks);
+            const pct = c.total > 0 ? Math.round(c.done / c.total * 100) : 0;
+            const grouped = groupBySectionFlow(allTasks);
+
+            let html = `<html><head><meta charset="UTF-8"><title>Módulo Contable - Avance</title><style>
+                body { font-family: Arial, sans-serif; font-size: 11px; color: #222; padding: 20px; }
+                h1 { font-size: 20px; margin-bottom: 4px; }
+                h2 { font-size: 14px; margin-top: 20px; margin-bottom: 8px; color: #333; border-bottom: 2px solid #333; padding-bottom: 4px; }
+                h3 { font-size: 12px; margin-top: 12px; margin-bottom: 6px; color: #555; }
+                .subtitle { color: #666; font-size: 12px; margin-bottom: 16px; }
+                .stats { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+                .stat { background: #f5f5f5; border-radius: 8px; padding: 10px 14px; }
+                .stat .val { font-size: 20px; font-weight: 700; }
+                .stat .lbl { font-size: 10px; color: #666; text-transform: uppercase; }
+                table { width: 100%; border-collapse: collapse; margin-top: 6px; margin-bottom: 12px; }
+                th { background: #333; color: white; padding: 6px 8px; text-align: left; font-size: 10px; }
+                td { padding: 4px 8px; border-bottom: 1px solid #ddd; font-size: 10px; }
+                tr:nth-child(even) { background: #f9f9f9; }
+                .done { color: #22c55e; font-weight: 600; }
+                .qa { color: #d97706; font-weight: 600; }
+                .dev { color: #1090e0; font-weight: 600; }
+                .todo { color: #87909e; }
+                .rework { color: #f97316; font-weight: 600; }
+                @media print { body { padding: 0; } h2 { page-break-before: auto; } }
+            </style></head><body>`;
+            html += `<h1>Módulo Contable — Avance Global</h1>`;
+            html += `<div class="subtitle">Informe: ${now} · 5 sprints · ${c.total} tarjetas · Avance ${pct}%</div>`;
+            html += `<div class="stats">
+                <div class="stat"><div class="val">${c.total}</div><div class="lbl">Total</div></div>
+                <div class="stat"><div class="val done">${c.done}</div><div class="lbl">Done</div></div>
+                <div class="stat"><div class="val qa">${c.qa}</div><div class="lbl">QA</div></div>
+                <div class="stat"><div class="val dev">${c.dev}</div><div class="lbl">Dev</div></div>
+                <div class="stat"><div class="val todo">${c.todo}</div><div class="lbl">Por Hacer</div></div>
+                <div class="stat"><div class="val rework">${c.rework}</div><div class="lbl">Reabiertas</div></div>
+            </div>`;
+
+            // Resumen por sección
+            html += '<h2>Resumen por Sección</h2>';
+            html += '<table><thead><tr><th>Sección</th><th>Flujos</th><th>Total</th><th>Done</th><th>QA</th><th>Dev</th><th>Por Hacer</th><th>Reabiertas</th><th>% Avance</th></tr></thead><tbody>';
+            SECTIONS_ORDER.forEach(sec => {
+                if (!grouped[sec]) return;
+                const tasks = Object.values(grouped[sec]).flat();
+                const sc = calcCounts(tasks);
+                const spct = sc.total > 0 ? Math.round(sc.done / sc.total * 100) : 0;
+                html += `<tr>
+                    <td><b>${sec}</b></td>
+                    <td>${Object.keys(grouped[sec]).length}</td>
+                    <td>${sc.total}</td>
+                    <td class="done">${sc.done}</td>
+                    <td class="qa">${sc.qa}</td>
+                    <td class="dev">${sc.dev}</td>
+                    <td class="todo">${sc.todo}</td>
+                    <td class="rework">${sc.rework}</td>
+                    <td>${spct}%</td>
+                </tr>`;
+            });
+            html += '</tbody></table>';
+
+            // Detalle por sección / flujo
+            SECTIONS_ORDER.forEach(sec => {
+                if (!grouped[sec]) return;
+                html += `<h2>${sec}</h2>`;
+                html += '<table><thead><tr><th>Flujo</th><th>Total</th><th>Done</th><th>QA</th><th>Dev</th><th>Por Hacer</th><th>Reabiertas</th></tr></thead><tbody>';
+                Object.entries(grouped[sec]).forEach(([fl, tasks]) => {
+                    const fc = calcCounts(tasks);
+                    html += `<tr><td>${escapeHtml(fl)}</td><td><b>${fc.total}</b></td><td class="done">${fc.done}</td><td class="qa">${fc.qa}</td><td class="dev">${fc.dev}</td><td class="todo">${fc.todo}</td><td class="rework">${fc.rework}</td></tr>`;
+                });
+                html += '</tbody></table>';
+            });
+
+            html += '</body></html>';
+            const w = window.open('', '_blank');
+            w.document.write(html); w.document.close();
+            setTimeout(() => w.print(), 500);
+        }
+
+        loadTasks();
+        setInterval(loadTasks, AUTO_REFRESH_MS);
+    </script>
+</body>
+</html>
