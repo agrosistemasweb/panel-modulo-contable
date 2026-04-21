@@ -445,7 +445,7 @@
         };
 
         let allTasks = [];
-        let expandedSections = new Set(SECTIONS_ORDER);
+        let expandedSections = new Set();
         let expandedFlows = new Set();
 
         const norm = s => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
@@ -837,15 +837,20 @@
             document.getElementById('filterType').value = '';
             document.getElementById('filterExpand').checked = false;
             expandedFlows.clear();
-            expandedSections = new Set(SECTIONS_ORDER);
+            expandedSections.clear();
             applyFilters();
         }
 
         function toggleExpandAll() {
             const checked = document.getElementById('filterExpand').checked;
             if (checked) {
-                allTasks.forEach(t => expandedFlows.add(t.section + '|' + t.flow));
+                SECTIONS_ORDER.forEach(s => expandedSections.add(s));
+                allTasks.forEach(t => {
+                    expandedSections.add(t.section);
+                    expandedFlows.add(t.section + '|' + t.flow);
+                });
             } else {
+                expandedSections.clear();
                 expandedFlows.clear();
             }
             applyFilters();
