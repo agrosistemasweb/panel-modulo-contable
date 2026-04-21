@@ -346,12 +346,11 @@
     <div id="errorBox" style="display:none;background:#ef444422;border:1px solid #ef4444;color:#ef4444;padding:12px 20px;margin:12px 24px;border-radius:8px;font-size:13px;font-family:monospace"></div>
     <div id="filterStatus" style="padding:8px 24px;font-size:12px;color:var(--text-muted);display:none"></div>
 
-    <div class="sections-container" id="sectionsContainer">
-        <div class="loading" id="loadingArea">
-            <div class="spinner"></div>
-            <span>Cargando las 5 listas de Sprints desde ClickUp...</span>
-        </div>
+    <div class="loading" id="loadingArea">
+        <div class="spinner"></div>
+        <span>Cargando las 5 listas de Sprints desde ClickUp...</span>
     </div>
+    <div class="sections-container" id="sectionsContainer"></div>
 
     <div class="modal-overlay" id="modalOverlay" onclick="closeModal(event)">
         <div class="modal" onclick="event.stopPropagation()">
@@ -633,7 +632,8 @@
                 const box = document.getElementById('errorBox');
                 if (box) {
                     box.style.display = 'block';
-                    box.textContent = `❌ applyFilters falló: ${err.message}`;
+                    box.style.whiteSpace = 'pre-wrap';
+                    box.textContent = `❌ applyFilters falló: ${err.message}\n\nStack:\n${err.stack}`;
                 }
                 console.error('applyFilters error', err);
             }
