@@ -450,13 +450,27 @@
 
         const norm = s => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 
-        async function apiGet(path) {
-            const r = await fetch(`${WORKER_URL}${path}`);
-            if (!r.ok) {
-                const e = await r.json().catch(() => ({}));
-                throw new Error(e.error || `Error ${r.status}`);
+        async function apiGet(path, retries = 3) {
+            let lastErr;
+            for (let attempt = 0; attempt <= retries; attempt++) {
+                try {
+                    const r = await fetch(`${WORKER_URL}${path}`);
+                    const text = await r.text();
+                    let data = null;
+                    try { data = JSON.parse(text); }
+                    catch { throw new Error(`Respuesta no-JSON (HTTP ${r.status}): ${text.slice(0, 120)}`); }
+                    if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+                    return data;
+                } catch (err) {
+                    lastErr = err;
+                    if (attempt < retries) {
+                        const wait = 500 * Math.pow(2, attempt);
+                        console.warn(`[apiGet] intento ${attempt + 1} falló (${err.message}). Reintento en ${wait}ms`);
+                        await new Promise(r => setTimeout(r, wait));
+                    }
+                }
             }
-            return r.json();
+            throw lastErr;
         }
 
         async function fetchAllPages(listId) {
@@ -464,6 +478,7 @@
             let page = 0, hasMore = true;
             while (hasMore) {
                 const data = await apiGet(`/api/tasks?list_id=${listId}&page=${page}&include_closed=true&subtasks=true`);
+                if (!data.tasks) break;
                 tasks = tasks.concat(data.tasks);
                 hasMore = data.tasks.length === 100;
                 page++;
@@ -562,19 +577,43 @@
             if (errBox) errBox.style.display = 'none';
 
             try {
-                const results = await Promise.all(SPRINT_LISTS.map(s => fetchAllPages(s.id).then(tasks => ({ sprint: s, tasks }))));
+                const settled = await Promise.allSettled(
+                    SPRINT_LISTS.map(s => fetchAllPages(s.id).then(tasks => ({ sprint: s, tasks })))
+                );
                 allTasks = [];
-                results.forEach(r => r.tasks.forEach(t => allTasks.push(mapTask(t, r.sprint.id, r.sprint.name))));
+                const failures = [];
+                settled.forEach((r, i) => {
+                    if (r.status === 'fulfilled') {
+                        r.value.tasks.forEach(t => allTasks.push(mapTask(t, r.value.sprint.id, r.value.sprint.name)));
+                    } else {
+                        failures.push({ sprint: SPRINT_LISTS[i], err: r.reason });
+                    }
+                });
 
                 populateSectionFilter();
                 applyFilters();
                 updateStats();
                 document.getElementById('lastUpdated').textContent = 'Actualizado: ' + new Date().toLocaleTimeString('es-AR');
                 console.log('[panel] cargadas', allTasks.length, 'tareas');
+
+                if (failures.length > 0) {
+                    const msg = failures.map(f => `${f.sprint.name}: ${f.err.message || f.err}`).join(' | ');
+                    errBox.style.display = 'block';
+                    errBox.style.whiteSpace = 'pre-wrap';
+                    errBox.textContent = `⚠ Algunos sprints fallaron (ver datos parciales): ${msg}`;
+                }
+
+                if (allTasks.length === 0) {
+                    document.getElementById('loadingArea').innerHTML =
+                        `<div style="color:var(--danger)">No se cargó ninguna lista.<br><br>
+                        <button class="btn-refresh" onclick="loadTasks()">Reintentar</button></div>`;
+                    document.getElementById('loadingArea').style.display = 'flex';
+                }
             } catch (err) {
                 document.getElementById('loadingArea').innerHTML =
                     `<div style="color:var(--danger)">Error: ${escapeHtml(err.message)}<br><br>
                     <button class="btn-refresh" onclick="loadTasks()">Reintentar</button></div>`;
+                document.getElementById('loadingArea').style.display = 'flex';
                 if (errBox) {
                     errBox.style.display = 'block';
                     errBox.textContent = `❌ loadTasks falló: ${err.message}`;
