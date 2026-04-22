@@ -1040,7 +1040,7 @@
         function updateStats(tasks, filtered) {
             const source = tasks || allTasks;
             const c = calcCounts(source);
-            const pct = c.total > 0 ? Math.round(c.done / c.total * 100) : 0;
+            const pct = c.total > 0 ? (Math.round(c.done / c.total * 1000) / 10).toFixed(1) : '0.0';
             const bd = (main, sub) => `<span class="pill" title="Principales"><span class="lbl">P</span>${main}</span><span class="pill" title="Subtareas"><span class="lbl">S</span>${sub}</span>`;
 
             document.getElementById('statTotal').textContent = c.total;
