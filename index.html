@@ -356,15 +356,16 @@
                 <option value="sub">Subtareas</option>
             </select>
         </div>
-        <div class="filter-group" style="border-left:1px solid var(--border); padding-left:14px; margin-left:4px">
-            <label title="Filtra por fecha de última actualización de la tarjeta">📅 Desde:</label>
-            <input type="date" class="filter-select filter-date" id="filterDateFrom" onchange="onDateChange()">
-            <label>Hasta:</label>
+        <div class="filter-group" style="border-left:1px solid var(--border); padding-left:14px; margin-left:4px"
+             title="Snapshot histórico: al corte 'Hasta', cuántas estaban Done vs Pendientes. 'Desde' filtra tarjetas creadas desde esa fecha (opcional).">
+            <label>📅 Corte hasta:</label>
             <input type="date" class="filter-select filter-date" id="filterDateTo" onchange="onDateChange()">
-            <button class="date-preset" onclick="setDatePreset('today')" id="preToday">Hoy</button>
-            <button class="date-preset" onclick="setDatePreset('week')" id="preWeek">7 días</button>
-            <button class="date-preset" onclick="setDatePreset('month')" id="preMonth">Mes</button>
-            <button class="date-preset" onclick="setDatePreset('all')" id="preAll">Sin fecha</button>
+            <label style="color:var(--text-muted);font-size:11px">+ creadas desde:</label>
+            <input type="date" class="filter-select filter-date" id="filterDateFrom" onchange="onDateChange()">
+            <button class="date-preset" onclick="setDatePreset('today')" id="preToday" title="Corte a hoy">Hoy</button>
+            <button class="date-preset" onclick="setDatePreset('week')" id="preWeek" title="Corte a hoy, creadas últimos 7 días">7 días</button>
+            <button class="date-preset" onclick="setDatePreset('month')" id="preMonth" title="Corte a hoy, creadas este mes">Mes</button>
+            <button class="date-preset" onclick="setDatePreset('all')" id="preAll" title="Sin corte, vista actual completa">Sin corte</button>
         </div>
         <div class="filter-group">
             <label><input type="checkbox" id="filterExpand" onchange="toggleExpandAll()"> Expandir todo</label>
@@ -375,6 +376,7 @@
     </div>
 
     <div id="errorBox" style="display:none;background:#ef444422;border:1px solid #ef4444;color:#ef4444;padding:12px 20px;margin:12px 24px;border-radius:8px;font-size:13px;font-family:monospace"></div>
+    <div id="snapshotBanner" style="display:none;background:#6366f122;border:1px solid #6366f1;color:#a5b4fc;padding:10px 18px;margin:10px 24px;border-radius:8px;font-size:12px;line-height:1.5"></div>
     <div id="filterStatus" style="padding:8px 24px;font-size:12px;color:var(--text-muted);display:none"></div>
 
     <div class="loading" id="loadingArea">
@@ -587,6 +589,8 @@
                 priority: t.priority ? t.priority.priority : 'none',
                 dateCreated: new Date(parseInt(t.date_created)),
                 dateUpdated: t.date_updated ? new Date(parseInt(t.date_updated)) : null,
+                dateDone:    t.date_done    ? new Date(parseInt(t.date_done))    : null,
+                dateClosed:  t.date_closed  ? new Date(parseInt(t.date_closed))  : null,
                 url: t.url, parent: t.parent,
                 sprintId, sprintName
             };
@@ -660,28 +664,46 @@
                 const dateToStr   = document.getElementById('filterDateTo').value;
                 const dateFrom = dateFromStr ? new Date(dateFromStr + 'T00:00:00') : null;
                 const dateTo   = dateToStr   ? new Date(dateToStr   + 'T23:59:59.999') : null;
+                const cutoff = dateTo; // "hasta" = corte histórico
                 const hasActiveFilter = !!(search || section || bucket || sprint || type || activeFlowFilter || dateFrom || dateTo);
 
-                const filtered = allTasks.filter(t => {
+                let filtered = allTasks.filter(t => {
                     if (search) {
                         const nameHit = (t.name || '').toLowerCase().includes(search);
                         const flowHit = (t.flow || '').toLowerCase().includes(search);
                         if (!nameHit && !flowHit) return false;
                     }
                     if (section && t.section !== section) return false;
-                    if (bucket && t.bucket !== bucket) return false;
+                    // Nota: 'bucket' se evalúa DESPUÉS del recálculo al corte
                     if (sprint && t.sprintId !== sprint) return false;
                     if (type === 'main' && t.isSub) return false;
                     if (type === 'sub' && !t.isSub) return false;
                     if (activeFlowFilter && t.flow !== activeFlowFilter) return false;
-                    if (dateFrom || dateTo) {
-                        const ref = t.dateUpdated || t.dateCreated;
-                        if (!ref) return false;
-                        if (dateFrom && ref < dateFrom) return false;
-                        if (dateTo   && ref > dateTo)   return false;
-                    }
+                    // Filtros de rango:
+                    //   dateFrom = creadas desde esa fecha
+                    //   cutoff (dateTo) = corte histórico: no existían si dateCreated > corte
+                    if (dateFrom && t.dateCreated && t.dateCreated < dateFrom) return false;
+                    if (cutoff   && t.dateCreated && t.dateCreated > cutoff)   return false;
                     return true;
                 });
+
+                // Snapshot histórico: si hay cutoff, recalcular bucket de cada tarjeta al corte.
+                // Limitación API pública ClickUp: sólo podemos distinguir DONE (tiene date_done/date_closed ≤ cutoff)
+                // vs PENDIENTE (no está done al corte). todo/dev/qa intermedios no se distinguen en el pasado.
+                if (cutoff) {
+                    filtered = filtered.map(t => {
+                        const doneAt = t.dateDone || t.dateClosed;
+                        const wasDone = doneAt && doneAt <= cutoff;
+                        if (wasDone) {
+                            return Object.assign({}, t, { bucket: 'done', status: 'done (histórico)', statusColor: '#22c55e' });
+                        }
+                        // Pendiente al corte
+                        return Object.assign({}, t, { bucket: 'todo', status: 'pendiente (histórico)', statusColor: '#87909e' });
+                    });
+                }
+
+                // Ahora sí, filtro por bucket (sobre el bucket ya recalculado si hubo cutoff)
+                if (bucket) filtered = filtered.filter(t => t.bucket === bucket);
 
                 if (hasActiveFilter) {
                     filtered.forEach(t => {
@@ -702,12 +724,31 @@
                     if (activeFlowFilter) parts.push(`flujo="${activeFlowFilter}"`);
                     if (dateFrom || dateTo) {
                         const fmt = d => d ? d.toLocaleDateString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric' }) : '—';
-                        parts.push(`actualizadas ${fmt(dateFrom)} → ${fmt(dateTo)}`);
+                        if (cutoff) parts.push(`📊 snapshot al ${fmt(cutoff)}`);
+                        if (dateFrom) parts.push(`creadas desde ${fmt(dateFrom)}`);
                     }
                     statusBox.style.display = 'block';
                     statusBox.innerHTML = `<b style="color:var(--accent)">${filtered.length}</b> de ${allTasks.length} tarjetas · Filtros: ${parts.join(' · ')} · <a href="javascript:clearFilters()" style="color:var(--accent)">limpiar</a>`;
                 } else {
                     statusBox.style.display = 'none';
+                }
+
+                // Banner snapshot histórico
+                const banner = document.getElementById('snapshotBanner');
+                if (cutoff) {
+                    const fmtD = d => d.toLocaleDateString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric' });
+                    const totalSnap = filtered.length;
+                    const doneSnap = filtered.filter(t => t.bucket === 'done').length;
+                    const pct = totalSnap > 0 ? Math.round(doneSnap / totalSnap * 1000) / 10 : 0;
+                    banner.style.display = 'block';
+                    banner.innerHTML = `
+                        <b>📊 Snapshot al ${fmtD(cutoff)}</b> — ${doneSnap} Done / ${totalSnap} Totales →
+                        <b style="color:#6366f1;font-size:14px">${pct}% avance</b>
+                        ${dateFrom ? `<br>Limitado a tarjetas creadas desde ${fmtD(dateFrom)}.` : ''}
+                        <br><span style="color:var(--text-muted)">Limitación: la API pública de ClickUp solo permite reconstruir Done vs Pendiente a fechas pasadas. Estados intermedios (qa/dev/todo) se colapsan en "Pendiente".</span>
+                    `;
+                } else {
+                    banner.style.display = 'none';
                 }
 
                 updateStats(filtered, hasActiveFilter);
@@ -946,12 +987,14 @@
             const to   = document.getElementById('filterDateTo');
             const today = new Date();
             if (preset === 'today') {
-                const s = toISODate(today);
-                from.value = s; to.value = s;
+                // Corte hoy, sin restricción de creación
+                from.value = ''; to.value = toISODate(today);
             } else if (preset === 'week') {
+                // Corte hoy, creadas en últimos 7 días
                 const t0 = new Date(today); t0.setDate(t0.getDate() - 6);
                 from.value = toISODate(t0); to.value = toISODate(today);
             } else if (preset === 'month') {
+                // Corte hoy, creadas este mes
                 const t0 = new Date(today.getFullYear(), today.getMonth(), 1);
                 from.value = toISODate(t0); to.value = toISODate(today);
             } else if (preset === 'all') {
@@ -988,7 +1031,7 @@
                 if (el) el.classList.remove('active');
             });
             if (!from && !to) document.getElementById('preAll').classList.add('active');
-            else if (from === today && to === today) document.getElementById('preToday').classList.add('active');
+            else if (!from && to === today) document.getElementById('preToday').classList.add('active');
             else if (from === weekAgo && to === today) document.getElementById('preWeek').classList.add('active');
             else if (from === monthStart && to === today) document.getElementById('preMonth').classList.add('active');
         }
