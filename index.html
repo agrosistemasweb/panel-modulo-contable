@@ -925,8 +925,16 @@
         }
 
         function toggleSection(sec) {
-            if (expandedSections.has(sec)) expandedSections.delete(sec);
-            else expandedSections.add(sec);
+            if (expandedSections.has(sec)) {
+                // Colapsar sección → colapsar también todos sus flujos (cascada)
+                expandedSections.delete(sec);
+                const prefix = sec + '|';
+                [...expandedFlows].forEach(k => {
+                    if (k.startsWith(prefix)) expandedFlows.delete(k);
+                });
+            } else {
+                expandedSections.add(sec);
+            }
             applyFilters();
         }
 
