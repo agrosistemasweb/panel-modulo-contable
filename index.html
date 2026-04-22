@@ -321,15 +321,15 @@
     <div class="filters">
         <div class="filter-group">
             <label>Buscar:</label>
-            <input type="text" class="filter-input" id="filterSearch" placeholder="Buscar por nombre..." oninput="activeFlowFilter='';applyFilters()">
+            <input type="text" class="filter-input" id="filterSearch" placeholder="Buscar por nombre..." oninput="activeFlowFilter='';applyFilters(true)">
         </div>
         <div class="filter-group">
             <label>Sección:</label>
-            <select class="filter-select" id="filterSection" onchange="applyFilters()"><option value="">Todas</option></select>
+            <select class="filter-select" id="filterSection" onchange="applyFilters(true)"><option value="">Todas</option></select>
         </div>
         <div class="filter-group">
             <label>Estado:</label>
-            <select class="filter-select" id="filterBucket" onchange="applyFilters()">
+            <select class="filter-select" id="filterBucket" onchange="applyFilters(true)">
                 <option value="">Todos</option>
                 <option value="todo">Por Hacer</option>
                 <option value="dev">En Desarrollo</option>
@@ -339,7 +339,7 @@
         </div>
         <div class="filter-group">
             <label>Sprint:</label>
-            <select class="filter-select" id="filterSprint" onchange="applyFilters()">
+            <select class="filter-select" id="filterSprint" onchange="applyFilters(true)">
                 <option value="">Todos</option>
                 <option value="901323690606">Sprint 1</option>
                 <option value="901324230121">Sprint 2</option>
@@ -350,7 +350,7 @@
         </div>
         <div class="filter-group">
             <label>Tipo:</label>
-            <select class="filter-select" id="filterType" onchange="applyFilters()">
+            <select class="filter-select" id="filterType" onchange="applyFilters(true)">
                 <option value="">Todas</option>
                 <option value="main">Principales</option>
                 <option value="sub">Subtareas</option>
@@ -651,7 +651,7 @@
             });
         }
 
-        function applyFilters() {
+        function applyFilters(autoExpand = false) {
             try {
                 const search = (document.getElementById('filterSearch').value || '').toLowerCase();
                 const section = document.getElementById('filterSection').value || '';
@@ -697,7 +697,8 @@
                 // Ahora sí, filtro por bucket (sobre el bucket ya recalculado si hubo cutoff)
                 if (bucket) filtered = filtered.filter(t => t.bucket === bucket);
 
-                if (hasActiveFilter) {
+                // Auto-expand SOLO cuando el filtro cambió (no en re-renders por toggle)
+                if (hasActiveFilter && autoExpand) {
                     filtered.forEach(t => {
                         expandedSections.add(t.section);
                         expandedFlows.add(t.section + '|' + t.flow);
@@ -951,7 +952,7 @@
             activeFlowFilter = flow || '';
             if (section) expandedSections.add(section);
             if (section && flow) expandedFlows.add(section + '|' + flow);
-            applyFilters();
+            applyFilters(true);
             setTimeout(() => {
                 const container = document.getElementById('sectionsContainer');
                 if (container) container.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1002,7 +1003,7 @@
                 expandedSections.clear();
                 expandedFlows.clear();
                 document.getElementById('filterExpand').checked = false;
-                applyFilters();
+                applyFilters(false);
             }
         }
 
@@ -1012,7 +1013,7 @@
             expandedSections.clear();
             expandedFlows.clear();
             document.getElementById('filterExpand').checked = false;
-            applyFilters();
+            applyFilters(false);
         }
 
         function updateDatePresetActive() {
