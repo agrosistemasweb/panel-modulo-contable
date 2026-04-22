@@ -958,11 +958,22 @@
                 from.value = ''; to.value = '';
             }
             updateDatePresetActive();
-            if (!skipApply) applyFilters();
+            if (!skipApply) {
+                // Al cambiar el filtro de fecha, compactamos la vista
+                // así el auto-expand del nuevo filtro parte de cero
+                expandedSections.clear();
+                expandedFlows.clear();
+                document.getElementById('filterExpand').checked = false;
+                applyFilters();
+            }
         }
 
         function onDateChange() {
             updateDatePresetActive();
+            // Compactar la vista al cambiar fechas manualmente
+            expandedSections.clear();
+            expandedFlows.clear();
+            document.getElementById('filterExpand').checked = false;
             applyFilters();
         }
 
