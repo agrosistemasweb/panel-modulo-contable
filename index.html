@@ -660,7 +660,10 @@
                 const type = document.getElementById('filterType').value || '';
                 const dateToStr = document.getElementById('filterDateTo').value;
                 const cutoff = dateToStr ? new Date(dateToStr + 'T23:59:59.999') : null;
-                const hasActiveFilter = !!(search || section || bucket || sprint || type || activeFlowFilter || cutoff);
+                // El snapshot histórico (colapsa qa/dev a "pendiente") sólo aplica cuando el corte es
+                // ANTERIOR a hoy. Para hoy o futuro mostramos los buckets reales actuales.
+                const isHistoric = !!(cutoff && dateToStr < toISODate(new Date()));
+                const hasActiveFilter = !!(search || section || bucket || sprint || type || activeFlowFilter || isHistoric);
 
                 let filtered = allTasks.filter(t => {
                     if (search) {
@@ -675,14 +678,14 @@
                     if (type === 'sub' && !t.isSub) return false;
                     if (activeFlowFilter && t.flow !== activeFlowFilter) return false;
                     // Corte histórico: la tarjeta no existía si dateCreated > corte
-                    if (cutoff && t.dateCreated && t.dateCreated > cutoff) return false;
+                    if (isHistoric && t.dateCreated && t.dateCreated > cutoff) return false;
                     return true;
                 });
 
-                // Snapshot histórico: si hay cutoff, recalcular bucket de cada tarjeta al corte.
+                // Snapshot histórico: si el corte es ANTERIOR a hoy, recalcular bucket al corte.
                 // Limitación API pública ClickUp: sólo podemos distinguir DONE (tiene date_done/date_closed ≤ cutoff)
                 // vs PENDIENTE (no está done al corte). todo/dev/qa intermedios no se distinguen en el pasado.
-                if (cutoff) {
+                if (isHistoric) {
                     filtered = filtered.map(t => {
                         const doneAt = t.dateDone || t.dateClosed;
                         const wasDone = doneAt && doneAt <= cutoff;
@@ -715,7 +718,7 @@
                     if (sprint) parts.push(`sprint=${sprint.slice(-4)}`);
                     if (type) parts.push(`tipo=${type}`);
                     if (activeFlowFilter) parts.push(`flujo="${activeFlowFilter}"`);
-                    if (cutoff) {
+                    if (isHistoric) {
                         const fmt = d => d.toLocaleDateString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric' });
                         parts.push(`📊 snapshot al ${fmt(cutoff)}`);
                     }
@@ -727,7 +730,7 @@
 
                 // Banner snapshot histórico
                 const banner = document.getElementById('snapshotBanner');
-                if (cutoff) {
+                if (isHistoric) {
                     const fmtD = d => d.toLocaleDateString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric' });
                     const totalSnap = filtered.length;
                     const doneSnap = filtered.filter(t => t.bucket === 'done').length;
