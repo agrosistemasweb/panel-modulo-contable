@@ -1071,7 +1071,7 @@
             // Badge: siempre total global + marcador si hay filtro
             const g = calcCounts(allTasks);
             const filterMark = filtered ? ` · <span style="opacity:.8">filtro: ${c.total}</span>` : '';
-            document.getElementById('totalBadge').innerHTML = `${g.total} tarjetas · 5 sprints · P:${g.main.total} / S:${g.sub.total}${filterMark}`;
+            document.getElementById('totalBadge').innerHTML = `${g.total} tarjetas · ${SPRINT_LISTS.length} sprints · P:${g.main.total} / S:${g.sub.total}${filterMark}`;
 
             // Overall progress bar
             const bar = document.getElementById('overallBar');
@@ -1228,7 +1228,7 @@
                 @media print { body { padding: 0; } h2 { page-break-before: auto; } }
             </style></head><body>`;
             html += `<h1>Módulo Contable — Avance Global</h1>`;
-            html += `<div class="subtitle">Informe: ${now} · 5 sprints · ${c.total} tarjetas · Avance ${pct}%</div>`;
+            html += `<div class="subtitle">Informe: ${now} · ${SPRINT_LISTS.length} sprints · ${c.total} tarjetas · Avance ${pct}%</div>`;
             html += `<div class="stats">
                 <div class="stat"><div class="val">${c.total}</div><div class="lbl">Total</div></div>
                 <div class="stat"><div class="val done">${c.done}</div><div class="lbl">Done</div></div>
