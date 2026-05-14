@@ -437,12 +437,25 @@
 
         // Mapeo de status → bucket
         const STATUS_BUCKET = {
+            // Estados en español (sprints actuales)
+            'pendiente': 'dev',
+            'reabiertas': 'dev',
+            'en curso': 'dev',
+            'bloqueado': 'dev',
+            'automation': 'dev',
+            'listo para  revision': 'dev',
+            'listo para revision': 'dev',
+            'listo  para qa': 'qa',
+            'listo para qa': 'qa',
+            'en qa': 'qa',
+            'terminado': 'done',
+            'cerrado': 'done',
+            // Estados en inglés (sprints viejos)
             'to do': 'todo',
             'a revisar': 'dev',
             'in progress': 'dev',
             'blocked': 'dev',
             'review': 'dev',
-            'automation': 'dev',
             'waiting qa': 'qa',
             'qa': 'qa',
             'done': 'done',
@@ -451,8 +464,20 @@
         const BUCKET_LABEL = { todo: 'Por Hacer', dev: 'En Desarrollo', qa: 'En QA', done: 'Done' };
         const BUCKET_COLOR = { todo: '#87909e', dev: '#1090e0', qa: '#ffc53d', done: '#22c55e' };
         const STATUS_COLORS = {
+            'pendiente': '#87909e',
+            'reabiertas': '#d97706',
+            'en curso': '#1090e0',
+            'bloqueado': '#f76808',
+            'automation': '#8b5cf6',
+            'listo para  revision': '#ab4aba',
+            'listo para revision': '#ab4aba',
+            'listo  para qa': '#ffc53d',
+            'listo para qa': '#ffc53d',
+            'en qa': '#ffc53d',
+            'terminado': '#22c55e',
+            'cerrado': '#12a594',
             'to do': '#87909e', 'a revisar': '#d97706', 'in progress': '#1090e0',
-            'blocked': '#f76808', 'review': '#ab4aba', 'automation': '#8b5cf6',
+            'blocked': '#f76808', 'review': '#ab4aba',
             'waiting qa': '#ffc53d', 'qa': '#1090e0',
             'done': '#22c55e', 'closed': '#12a594'
         };
