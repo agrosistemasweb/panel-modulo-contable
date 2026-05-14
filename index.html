@@ -449,7 +449,7 @@
             'listo para qa': 'qa',
             'en qa': 'qa',
             'terminado': 'done',
-            'cerrado': 'done',
+            // 'cerrado' -> excluido (no cuenta como done, ver filtro en buildState)
             // Estados en inglés (sprints viejos)
             'to do': 'todo',
             'a revisar': 'dev',
@@ -458,8 +458,8 @@
             'review': 'dev',
             'waiting qa': 'qa',
             'qa': 'qa',
-            'done': 'done',
-            'closed': 'done'
+            'done': 'done'
+            // 'closed' -> excluido
         };
         const BUCKET_LABEL = { todo: 'Por Hacer', dev: 'En Desarrollo', qa: 'En QA', done: 'Done' };
         const BUCKET_COLOR = { todo: '#87909e', dev: '#1090e0', qa: '#ffc53d', done: '#22c55e' };
@@ -632,9 +632,17 @@
                 );
                 allTasks = [];
                 const failures = [];
+                // Estados que se EXCLUYEN del dataset:
+                //  - cerrado/closed: archivados, no cuentan como Done
+                //  - automation: tareas auto-generadas, inflan los conteos sin ser trabajo real
+                const EXCLUDED_STATUSES = new Set(['cerrado', 'closed', 'automation']);
                 settled.forEach((r, i) => {
                     if (r.status === 'fulfilled') {
-                        r.value.tasks.forEach(t => allTasks.push(mapTask(t, r.value.sprint.id, r.value.sprint.name)));
+                        r.value.tasks.forEach(t => {
+                            const st = (t.status?.status || '').toLowerCase();
+                            if (EXCLUDED_STATUSES.has(st)) return;
+                            allTasks.push(mapTask(t, r.value.sprint.id, r.value.sprint.name));
+                        });
                     } else {
                         failures.push({ sprint: SPRINT_LISTS[i], err: r.reason });
                     }
