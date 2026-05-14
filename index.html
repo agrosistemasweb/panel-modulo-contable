@@ -277,7 +277,7 @@
             </div>
         </div>
         <div class="stat-card">
-            <div class="label">🏁 Done / Closed</div>
+            <div class="label">🏁 Done</div>
             <div class="value-row">
                 <div class="value" style="color:#22c55e" id="statDone">-</div>
                 <div class="sub-breakdown" id="statDoneBreakdown"></div>
@@ -311,7 +311,7 @@
     <div class="overall-progress">
         <div class="overall-bar" id="overallBar"></div>
         <div class="overall-legend">
-            <span><span class="legend-dot" style="background:#22c55e"></span>Done / Closed</span>
+            <span><span class="legend-dot" style="background:#22c55e"></span>Done</span>
             <span><span class="legend-dot" style="background:#ffc53d"></span>En QA</span>
             <span><span class="legend-dot" style="background:#1090e0"></span>En Desarrollo</span>
             <span><span class="legend-dot" style="background:#87909e;opacity:0.5"></span>Por Hacer</span>
@@ -334,7 +334,7 @@
                 <option value="todo">Por Hacer</option>
                 <option value="dev">En Desarrollo</option>
                 <option value="qa">En QA</option>
-                <option value="done">Done / Closed</option>
+                <option value="done">Done</option>
             </select>
         </div>
         <div class="filter-group">
@@ -438,27 +438,26 @@
         // Mapeo de status → bucket
         const STATUS_BUCKET = {
             // Estados en español (sprints actuales)
-            'pendiente': 'dev',
-            'reabiertas': 'dev',
-            'en curso': 'dev',
-            'bloqueado': 'dev',
-            'automation': 'dev',
-            'listo para  revision': 'dev',
-            'listo para revision': 'dev',
+            'pendiente':  'todo',   // Por Hacer
+            'reabiertas': 'todo',   // Por Hacer (volvio del QA o cerrada => trabajo pendiente)
+            'en curso':              'dev',
+            'bloqueado':             'dev',
+            'listo para  revision':  'dev',
+            'listo para revision':   'dev',
             'listo  para qa': 'qa',
-            'listo para qa': 'qa',
-            'en qa': 'qa',
+            'listo para qa':  'qa',
+            'en qa':          'qa',
             'terminado': 'done',
-            // 'cerrado' -> excluido (no cuenta como done, ver filtro en buildState)
+            // 'automation' y 'cerrado' -> excluidos del dataset (ver allTasks filter)
             // Estados en inglés (sprints viejos)
-            'to do': 'todo',
-            'a revisar': 'dev',
+            'to do':       'todo',
+            'a revisar':   'dev',
             'in progress': 'dev',
-            'blocked': 'dev',
-            'review': 'dev',
-            'waiting qa': 'qa',
-            'qa': 'qa',
-            'done': 'done'
+            'blocked':     'dev',
+            'review':      'dev',
+            'waiting qa':  'qa',
+            'qa':          'qa',
+            'done':        'done'
             // 'closed' -> excluido
         };
         const BUCKET_LABEL = { todo: 'Por Hacer', dev: 'En Desarrollo', qa: 'En QA', done: 'Done' };
