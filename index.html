@@ -568,12 +568,15 @@
         async function fetchAllPages(listId) {
             let tasks = [];
             let page = 0, hasMore = true;
+            // Cortar por el flag last_page (no por length===100): ClickUp con
+            // subtasks=true puede devolver paginas de <100 sin ser la ultima, y
+            // cortar por cantidad truncaba el sprint perdiendo tareas/asignados.
             while (hasMore) {
                 const data = await apiGet(`/api/tasks?list_id=${listId}&page=${page}&include_closed=true&subtasks=true`);
-                if (!data.tasks) break;
-                tasks = tasks.concat(data.tasks);
-                hasMore = data.tasks.length === 100;
+                tasks = tasks.concat(data.tasks || []);
+                hasMore = data.last_page === false && (data.tasks || []).length > 0;
                 page++;
+                if (page > 100) break; // tope de seguridad
             }
             return tasks;
         }
