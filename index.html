@@ -168,6 +168,13 @@
             font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; white-space: nowrap;
         }
         .task-sprint { font-size: 10px; color: var(--text-muted); white-space: nowrap; }
+        .row-assignees { display: inline-flex; gap: 3px; flex-shrink: 0; }
+        .row-avatar {
+            width: 20px; height: 20px; border-radius: 50%;
+            display: inline-flex; align-items: center; justify-content: center;
+            font-size: 9px; font-weight: 600; color: white; border: 1px solid var(--bg);
+        }
+        .row-noasg { font-size: 10px; color: var(--text-muted); flex-shrink: 0; }
 
         /* Modal */
         .modal-overlay {
@@ -341,12 +348,12 @@
             <label>Sprint:</label>
             <select class="filter-select" id="filterSprint" onchange="applyFilters(true)">
                 <option value="">Todos</option>
-                <option value="901323690606">Sprint 1</option>
-                <option value="901324230121">Sprint 2</option>
-                <option value="901324539845">Sprint 3</option>
-                <option value="901325316130">Sprint 4</option>
-                <option value="901326731539">Sprint 5</option>
-                <option value="901327168887">Sprint 6</option>
+            </select>
+        </div>
+        <div class="filter-group">
+            <label>Asignado:</label>
+            <select class="filter-select" id="filterAssignee" onchange="applyFilters(true)">
+                <option value="">Todos</option>
             </select>
         </div>
         <div class="filter-group">
@@ -380,7 +387,7 @@
 
     <div class="loading" id="loadingArea">
         <div class="spinner"></div>
-        <span>Cargando las 6 listas de Sprints desde ClickUp...</span>
+        <span>Cargando los Sprints del Modulo Contable desde ClickUp...</span>
     </div>
     <div class="sections-container" id="sectionsContainer"></div>
 
@@ -416,14 +423,48 @@
             }
         });
 
-        const SPRINT_LISTS = [
+        // Las listas de sprints se cargan dinamicamente del folder para que cada
+        // sprint nuevo (y el activo) aparezcan solos, sin tocar el codigo.
+        const SPRINT_FOLDER_ID = '901316203875';
+        let SPRINT_LISTS = [];
+        const SPRINT_LISTS_FALLBACK = [
             { id: '901323690606', name: 'Sprint 1' },
             { id: '901324230121', name: 'Sprint 2' },
             { id: '901324539845', name: 'Sprint 3' },
             { id: '901325316130', name: 'Sprint 4' },
             { id: '901326731539', name: 'Sprint 5' },
-            { id: '901327168887', name: 'Sprint 6' }
+            { id: '901327168887', name: 'Sprint 6' },
+            { id: '901327484231', name: 'Sprint 7' }
         ];
+
+        function parseSprintNum(name) {
+            const m = (name || '').match(/sprint\s*(\d+)/i);
+            return m ? parseInt(m[1], 10) : 1; // "Sprint Modulo Contable" => Sprint 1
+        }
+
+        async function initSprints() {
+            try {
+                const data = await apiGet(`/api/folder/${SPRINT_FOLDER_ID}/list`);
+                const lists = (data.lists || [])
+                    .filter(l => !l.archived)
+                    .map(l => ({ id: l.id, num: parseSprintNum(l.name), name: `Sprint ${parseSprintNum(l.name)}` }))
+                    .sort((a, b) => a.num - b.num);
+                if (lists.length) SPRINT_LISTS = lists.map(l => ({ id: l.id, name: l.name }));
+            } catch (err) {
+                console.warn('No se pudieron cargar los sprints dinamicamente, uso fallback:', err);
+            }
+            if (!SPRINT_LISTS.length) SPRINT_LISTS = SPRINT_LISTS_FALLBACK;
+            populateSprintFilter();
+            loadTasks();
+            setInterval(loadTasks, AUTO_REFRESH_MS);
+        }
+
+        function populateSprintFilter() {
+            const sel = document.getElementById('filterSprint');
+            if (!sel) return;
+            sel.innerHTML = '<option value="">Todos</option>' +
+                SPRINT_LISTS.map(s => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('');
+        }
 
         const SECTIONS_ORDER = ['Configuración', 'Listas', 'Registración', 'Informes Contables', 'Informes Impositivos', 'Otros'];
         const SECTION_ICONS = {
@@ -442,6 +483,8 @@
             'reabiertas': 'todo',   // Por Hacer (volvio del QA o cerrada => trabajo pendiente)
             'en curso':              'dev',
             'bloqueado':             'dev',
+            'blockeado':             'dev',   // typo de estado en ClickUp (Sprint 7)
+            'bloqueado - rev -fun':  'dev',   // bloqueado pendiente revision/funcional
             'listo para  revision':  'dev',
             'listo para revision':   'dev',
             'listo  para qa': 'qa',
@@ -467,6 +510,8 @@
             'reabiertas': '#d97706',
             'en curso': '#1090e0',
             'bloqueado': '#f76808',
+            'blockeado': '#f76808',
+            'bloqueado - rev -fun': '#f76808',
             'automation': '#8b5cf6',
             'listo para  revision': '#ab4aba',
             'listo para revision': '#ab4aba',
@@ -648,6 +693,7 @@
                 });
 
                 populateSectionFilter();
+                populateAssigneeFilter();
                 applyFilters();
                 document.getElementById('lastUpdated').textContent = 'Actualizado: ' + new Date().toLocaleTimeString('es-AR');
                 console.log('[panel] cargadas', allTasks.length, 'tareas');
@@ -685,19 +731,33 @@
             });
         }
 
+        // Asignados reales presentes en las tarjetas cargadas, con su conteo
+        function populateAssigneeFilter() {
+            const sel = document.getElementById('filterAssignee');
+            if (!sel) return;
+            const prev = sel.value;
+            const counts = {};
+            allTasks.forEach(t => t.assignees.forEach(a => { counts[a.name] = (counts[a.name] || 0) + 1; }));
+            const people = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+            sel.innerHTML = '<option value="">Todos</option>' +
+                people.map(([name, n]) => `<option value="${escapeHtml(name)}">${escapeHtml(name)} (${n})</option>`).join('');
+            if (prev) sel.value = prev;
+        }
+
         function applyFilters(autoExpand = false) {
             try {
                 const search = (document.getElementById('filterSearch').value || '').toLowerCase();
                 const section = document.getElementById('filterSection').value || '';
                 const bucket = document.getElementById('filterBucket').value || '';
                 const sprint = document.getElementById('filterSprint').value || '';
+                const assignee = document.getElementById('filterAssignee').value || '';
                 const type = document.getElementById('filterType').value || '';
                 const dateToStr = document.getElementById('filterDateTo').value;
                 const cutoff = dateToStr ? new Date(dateToStr + 'T23:59:59.999') : null;
                 // El snapshot histórico (colapsa qa/dev a "pendiente") sólo aplica cuando el corte es
                 // ANTERIOR a hoy. Para hoy o futuro mostramos los buckets reales actuales.
                 const isHistoric = !!(cutoff && dateToStr < toISODate(new Date()));
-                const hasActiveFilter = !!(search || section || bucket || sprint || type || activeFlowFilter || isHistoric);
+                const hasActiveFilter = !!(search || section || bucket || sprint || assignee || type || activeFlowFilter || isHistoric);
 
                 let filtered = allTasks.filter(t => {
                     if (search) {
@@ -708,6 +768,7 @@
                     if (section && t.section !== section) return false;
                     // Nota: 'bucket' se evalúa DESPUÉS del recálculo al corte
                     if (sprint && t.sprintId !== sprint) return false;
+                    if (assignee && !t.assignees.some(a => a.name === assignee)) return false;
                     if (type === 'main' && t.isSub) return false;
                     if (type === 'sub' && !t.isSub) return false;
                     if (activeFlowFilter && t.flow !== activeFlowFilter) return false;
@@ -750,6 +811,7 @@
                     if (section) parts.push(`sección="${section}"`);
                     if (bucket) parts.push(`estado="${bucket}"`);
                     if (sprint) parts.push(`sprint=${sprint.slice(-4)}`);
+                    if (assignee) parts.push(`asignado="${assignee}"`);
                     if (type) parts.push(`tipo=${type}`);
                     if (activeFlowFilter) parts.push(`flujo="${activeFlowFilter}"`);
                     if (isHistoric) {
@@ -951,9 +1013,13 @@
                 ? `<span class="task-badge" style="background:var(--surface);color:var(--text-muted);border:1px solid var(--border)">${childCount} sub</span>`
                 : '';
             const prefix = isChild ? '<span style="color:var(--text-muted);margin-right:4px">↳</span>' : '';
+            const asgHtml = t.assignees.length
+                ? `<span class="row-assignees" title="${escapeAttr(t.assignees.map(a => a.name).join(', '))}">${t.assignees.slice(0, 3).map(a => `<span class="row-avatar" style="background:${a.color || '#6366f1'}">${escapeHtml(a.initials || '?')}</span>`).join('')}${t.assignees.length > 3 ? `<span class="row-noasg">+${t.assignees.length - 3}</span>` : ''}</span>`
+                : '<span class="row-noasg">sin asignar</span>';
             row.innerHTML = `
                 <span class="task-status-dot" style="background:${color}"></span>
                 <span class="task-name">${prefix}${escapeHtml(t.name)}${reworkTag}</span>
+                ${asgHtml}
                 ${childBadge}
                 ${typeTag}
                 <span class="task-badge" style="background:${color}22;color:${color};border:1px solid ${color}44">${t.status}</span>
@@ -1001,6 +1067,7 @@
             document.getElementById('filterSection').value = '';
             document.getElementById('filterBucket').value = '';
             document.getElementById('filterSprint').value = '';
+            document.getElementById('filterAssignee').value = '';
             document.getElementById('filterType').value = '';
             document.getElementById('filterExpand').checked = false;
             // Reset fechas a hoy (default pedido)
@@ -1318,8 +1385,8 @@
         // Inicializar filtro de fechas con "hoy" por default
         setDatePreset('today', /*skipApply=*/true);
 
-        loadTasks();
-        setInterval(loadTasks, AUTO_REFRESH_MS);
+        // Carga dinamica de sprints (incluye el activo y los nuevos) + arranque
+        initSprints();
     </script>
 </body>
 </html>
